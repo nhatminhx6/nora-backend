@@ -28,6 +28,8 @@
       "@nora/users": ["packages/modules/users/src"]
       ,"@nora/content": ["packages/modules/content/src"]
       ,"@nora/content/*": ["packages/modules/content/src/*"]
+      ,"@nora/ingestion": ["packages/modules/ingestion/src"]
+      ,"@nora/ingestion/*": ["packages/modules/ingestion/src/*"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts"],

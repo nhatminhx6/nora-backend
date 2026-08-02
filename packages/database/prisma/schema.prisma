@@ -359,9 +359,28 @@ model Insight {
   insightEvents   InsightEvent[]
   insightEntities InsightEntity[]
   userInsights    UserInsight[]
+  localizations   InsightLocalization[]
 
   @@index([type, generatedAt(sort: Desc)])
   @@map("insights")
+}
+
+model InsightLocalization {
+  id               String   @id @default(uuid()) @db.Uuid
+  insightId        String   @map("insight_id") @db.Uuid
+  locale           String   @db.VarChar(2)
+  title            String   @db.Text
+  content          String   @db.Text
+  relevanceReason  String   @map("relevance_reason") @db.Text
+  suggestedAction  String?  @map("suggested_action") @db.Text
+  provider         String?  @db.VarChar(64)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  insight          Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@unique([insightId, locale])
+  @@index([locale, updatedAt(sort: Desc)])
+  @@map("insight_localizations")
 }
 
 model InsightEvent {

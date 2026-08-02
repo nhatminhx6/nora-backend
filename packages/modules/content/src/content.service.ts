@@ -130,7 +130,8 @@ export class ContentService {
     });
   }
 
-  async getDailyBrief(userId: string, rawDate?: string) {
+  async getDailyBrief(userId: string, rawLocale?: string, rawDate?: string) {
+    const locale = this.parseLocale(rawLocale);
     const date = this.parseDate(rawDate);
     const brief = await this.prisma.dailyBrief.findFirst({
       where: { userId, briefDate: date, status: DailyBriefStatus.READY },
@@ -140,7 +141,7 @@ export class ContentService {
           include: {
             userInsight: {
               include: {
-                insight: { include: { insightEvents: { include: { event: true } } } },
+                insight: { include: { localizations: { where: { locale } }, insightEvents: { include: { event: true } } } },
                 interest: true,
               },
             },
@@ -152,7 +153,7 @@ export class ContentService {
       return { brief: null };
     }
     const insights = brief.items.flatMap((item) =>
-      item.userInsight ? [this.mapInsight(item.userInsight)] : [],
+      item.userInsight ? [this.mapInsight(item.userInsight, locale)] : [],
     );
     const importantInsights = insights.filter((item) => item.type !== 'informational');
     const otherInsights = insights.filter((item) => item.type === 'informational');
@@ -160,7 +161,9 @@ export class ContentService {
       brief: {
         id: brief.id,
         date: brief.briefDate,
-        headline: brief.title,
+        headline: locale === 'vi'
+          ? `${insights.length} cập nhật đáng chú ý từ các chủ đề anh theo dõi`
+          : `${insights.length} updates worth your attention from tracked topics`,
         importantInsights,
         otherInsights,
         upcomingItems: [],
@@ -168,7 +171,8 @@ export class ContentService {
     };
   }
 
-  async getInterestInsights(userId: string, interestId: string) {
+  async getInterestInsights(userId: string, interestId: string, rawLocale?: string) {
+    const locale = this.parseLocale(rawLocale);
     const interest = await this.prisma.interest.findFirst({
       where: { id: interestId, userId, deletedAt: null },
     });
@@ -179,11 +183,11 @@ export class ContentService {
       where: { userId, interestId },
       orderBy: { createdAt: 'desc' },
       include: {
-        insight: { include: { insightEvents: { include: { event: true } } } },
+        insight: { include: { localizations: { where: { locale } }, insightEvents: { include: { event: true } } } },
         interest: true,
       },
     });
-    return rows.map((row) => this.mapInsight(row));
+    return rows.map((row) => this.mapInsight(row, locale));
   }
 
   async updateUserInsight(userId: string, id: string, dto: UpdateUserInsightDto) {
@@ -206,24 +210,31 @@ export class ContentService {
     return updated;
   }
 
-  private mapInsight(row: any) {
+  private mapInsight(row: any, locale: 'vi' | 'en') {
     const config = this.asObject(row.interest?.config);
     const matchedReason = this.asObject(row.matchedReason);
     const metadata = this.asObject(row.insight.metadata);
     const events = row.insight.insightEvents.map((relation: any) => relation.event);
     const firstEvent = events[0];
+    const eventMetadata = this.asObject(firstEvent?.metadata);
+    const localization = row.insight.localizations?.[0];
     return {
       id: row.id,
       topicId: row.interestId,
       topicName: row.interest?.name ?? '',
       category: typeof config.category === 'string' ? config.category : 'other',
       type: this.insightType(row.insight.type, Number(row.insight.importanceScore)),
-      title: row.insight.title,
-      summary: row.insight.content,
+      title: localization?.title ?? row.insight.title,
+      summary: localization?.content ?? row.insight.content,
       relevanceReason:
-        typeof matchedReason.reason === 'string' ? matchedReason.reason : row.interest?.description ?? '',
-      suggestedAction: typeof metadata.suggestedAction === 'string' ? metadata.suggestedAction : null,
+        localization?.relevanceReason
+        ?? (typeof matchedReason.reason === 'string' ? matchedReason.reason : row.interest?.description ?? ''),
+      suggestedAction: localization?.suggestedAction
+        ?? (typeof metadata.suggestedAction === 'string' ? metadata.suggestedAction : null),
       sourceCount: events.length,
+      sourceName:
+        typeof eventMetadata.sourceName === 'string' ? eventMetadata.sourceName : firstEvent?.author ?? null,
+      sourceUrl: firstEvent?.url ?? null,
       publishedAt: firstEvent?.publishedAt ?? row.insight.generatedAt,
       eventDate: firstEvent?.occurredAt ?? null,
       isRead: row.status === UserInsightStatus.READ,
@@ -247,6 +258,16 @@ export class ContentService {
       throw new BadRequestException({ code: 'INVALID_DATE', message: 'date is invalid' });
     }
     return date;
+  }
+
+  private parseLocale(rawLocale?: string): 'vi' | 'en' {
+    if (rawLocale !== 'vi' && rawLocale !== 'en') {
+      throw new BadRequestException({
+        code: 'INVALID_LOCALE',
+        message: 'locale is required and must be either vi or en',
+      });
+    }
+    return rawLocale;
   }
 
   private asObject(value: unknown): Record<string, unknown> {
