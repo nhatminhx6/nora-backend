@@ -122,6 +122,7 @@ model User {
   locale            String            @default("en") @db.VarChar(16)
   status            UserStatus        @default(ACTIVE)
   notificationPrefs Json               @default("{}") @map("notification_prefs") @db.JsonB
+  profileData       Json               @default("{}") @map("profile_data") @db.JsonB
   lastLoginAt       DateTime?          @map("last_login_at") @db.Timestamptz(3)
   createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)

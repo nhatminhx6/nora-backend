@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, RefreshToken, User } from '@prisma/client';
+import { Prisma, RefreshToken, User, UserStatus } from '@prisma/client';
 import { PrismaService } from '@nora/database';
 
 export interface NewUserInput {
@@ -27,6 +27,10 @@ export class AuthRepository {
 
   findUserByEmail(email: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { email } });
+  }
+
+  findActiveUserById(id: string): Promise<User | null> {
+    return this.prisma.user.findFirst({ where: { id, status: UserStatus.ACTIVE } });
   }
 
   createRefreshToken(input: NewRefreshTokenInput): Promise<RefreshToken> {

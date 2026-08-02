@@ -8,11 +8,20 @@ import {
 } from '@nora/common';
 import { DatabaseModule } from '@nora/database';
 import { AuthModule } from '@nora/auth';
+import { InterestsModule } from '@nora/interests';
 import { UsersModule } from '@nora/users';
+import { ContentModule } from '@nora/content';
 import { HealthController } from './health.controller';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), DatabaseModule, AuthModule, UsersModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    DatabaseModule,
+    AuthModule,
+    UsersModule,
+    InterestsModule,
+    ContentModule,
+  ],
   controllers: [HealthController],
   providers: [
     { provide: APP_INTERCEPTOR, useClass: RequestContextInterceptor },

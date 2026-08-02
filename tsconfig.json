@@ -23,7 +23,11 @@
       "@nora/database": ["packages/database/src"],
       "@nora/database/*": ["packages/database/src/*"],
       "@nora/auth": ["packages/modules/auth/src"],
+      "@nora/interests": ["packages/modules/interests/src"],
+      "@nora/interests/*": ["packages/modules/interests/src/*"],
       "@nora/users": ["packages/modules/users/src"]
+      ,"@nora/content": ["packages/modules/content/src"]
+      ,"@nora/content/*": ["packages/modules/content/src/*"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts"],
