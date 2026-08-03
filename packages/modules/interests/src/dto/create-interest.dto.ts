@@ -1,23 +1,19 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { EntityType } from '@prisma/client';
-import { IsEnum, IsObject, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class CreateInterestDto {
-  @ApiProperty({ example: 'SwiftUI' })
-  @IsString({ message: 'name must be a string' })
-  @MinLength(1, { message: 'name is required' })
-  @MaxLength(160, { message: 'name must not exceed 160 characters' })
-  name!: string;
+  @ApiProperty({ example: 'travel' })
+  @IsString({ message: 'topicKey must be a string' })
+  @MaxLength(80, { message: 'topicKey must not exceed 80 characters' })
+  topicKey!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ type: [String], example: ['Cửu Trại Câu', 'Thành Đô'] })
   @IsOptional()
-  @IsString({ message: 'description must be a string' })
-  @MaxLength(2000, { message: 'description must not exceed 2000 characters' })
-  description?: string;
-
-  @ApiProperty({ enum: EntityType, example: EntityType.TECHNOLOGY })
-  @IsEnum(EntityType, { message: 'type must be a valid entity type' })
-  type!: EntityType;
+  @IsArray({ message: 'refinements must be an array' })
+  @ArrayMaxSize(12, { message: 'refinements must not contain more than 12 values' })
+  @IsString({ each: true, message: 'each refinement must be a string' })
+  @MaxLength(80, { each: true, message: 'each refinement must not exceed 80 characters' })
+  refinements?: string[];
 
   @ApiPropertyOptional({ type: Object })
   @IsOptional()

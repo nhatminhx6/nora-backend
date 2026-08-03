@@ -15,6 +15,7 @@ export class InterestsRepository {
 
   create(input: {
     userId: string;
+    topicKey?: string;
     name: string;
     normalizedName: string;
     description?: string;

@@ -1,8 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Interest, Prisma } from '@prisma/client';
 import { CreateInterestDto } from './dto/create-interest.dto';
 import { UpdateInterestDto } from './dto/update-interest.dto';
 import { InterestsRepository } from './interests.repository';
+import { parseLocale, TOPIC_CATALOG } from './topic-catalog';
 
 @Injectable()
 export class InterestsService {
@@ -12,16 +13,43 @@ export class InterestsService {
     return this.interestsRepository.list(userId);
   }
 
+  catalog(rawLocale?: string) {
+    const locale = parseLocale(rawLocale);
+    return TOPIC_CATALOG.map((topic) => ({
+      key: topic.key,
+      name: topic.names[locale],
+      description: topic.descriptions[locale],
+      category: topic.category,
+      symbol: topic.symbol,
+      refinementLabel: topic.refinementLabels[locale],
+      refinementPlaceholder: topic.refinementPlaceholders[locale],
+    }));
+  }
+
   async create(userId: string, dto: CreateInterestDto): Promise<Interest> {
-    const name = dto.name.trim();
+    const topicKey = dto.topicKey.trim().toLocaleLowerCase('en-US');
+    const topic = TOPIC_CATALOG.find((item) => item.key === topicKey);
+    if (!topic) {
+      throw new BadRequestException({ code: 'INVALID_TOPIC_KEY', message: 'topicKey must come from the topic catalog' });
+    }
+    const refinements = [...new Set((dto.refinements ?? []).map((value) => value.trim()).filter(Boolean))];
+    const name = topic.names.en;
+    const clientConfig = dto.config ?? {};
     try {
       return await this.interestsRepository.create({
         userId,
+        topicKey,
         name,
         normalizedName: this.normalizeName(name),
-        ...(dto.description === undefined ? {} : { description: dto.description.trim() }),
-        type: dto.type,
-        ...(dto.config === undefined ? {} : { config: dto.config as Prisma.InputJsonObject }),
+        description: topic.descriptions.en,
+        type: topic.type,
+        config: {
+          ...clientConfig,
+          topicKey,
+          category: topic.category,
+          refinements,
+          queryTerms: [name, ...refinements],
+        } as Prisma.InputJsonObject,
       });
     } catch (error) {
       this.handleUniqueName(error);

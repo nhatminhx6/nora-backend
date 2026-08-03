@@ -46,13 +46,15 @@ export class IngestionService {
       where: { userId, status: InterestStatus.ACTIVE, deletedAt: null },
       orderBy: { createdAt: 'asc' },
     });
-    const source = await this.ensureSource();
     let eventCount = 0;
     let insightCount = 0;
 
     for (const interest of interests) {
       try {
-        const feedUrl = this.feedUrl(interest.name);
+        const searchTerms = this.interestSearchTerms(interest.name, interest.config);
+        const topicKey = this.topicKey(interest.config);
+        const feedUrl = this.feedUrl(topicKey);
+        const source = await this.ensureSource(topicKey, feedUrl);
         const subscription = await this.prisma.sourceSubscription.upsert({
           where: { sourceId_subscriptionKey: { sourceId: source.id, subscriptionKey: `interest:${interest.id}` } },
           update: {
@@ -69,10 +71,11 @@ export class IngestionService {
           },
         });
         const freshnessCutoff = Date.now() - 7 * 24 * 3_600_000;
-        const items = (await this.fetchFeed(feedUrl)).filter(
-          (item) => item.publishedAt.getTime() >= freshnessCutoff && this.matchesInterest(interest.name, `${item.title} ${item.description}`),
-        );
-        for (const item of items.slice(0, 8)) {
+        const items = (await this.fetchFeed(feedUrl))
+          .filter((item) => item.publishedAt.getTime() >= freshnessCutoff)
+          .sort((left, right) => Number(this.matchesAnyTerm(searchTerms, `${right.title} ${right.description}`))
+            - Number(this.matchesAnyTerm(searchTerms, `${left.title} ${left.description}`)));
+        for (const item of items.slice(0, 4)) {
           const result = await this.persistItem({ userId, interestId: interest.id, sourceId: source.id, subscriptionId: subscription.id, item });
           eventCount += result.eventCreated ? 1 : 0;
           insightCount += result.insightCreated ? 1 : 0;
@@ -86,12 +89,12 @@ export class IngestionService {
             lastErrorCode: null,
           },
         });
+        await this.prisma.source.update({ where: { id: source.id }, data: { lastSyncedAt: new Date() } });
       } catch (error) {
         this.logger.warn(`RSS sync failed for interest ${interest.id}: ${error instanceof Error ? error.message : 'unknown error'}`);
       }
     }
 
-    await this.prisma.source.update({ where: { id: source.id }, data: { lastSyncedAt: new Date() } });
     const briefId = await this.rebuildTodayBrief(userId);
     return { interests: interests.length, events: eventCount, insights: insightCount, briefId };
   }
@@ -106,27 +109,36 @@ export class IngestionService {
     }
   }
 
-  private async ensureSource() {
+  private async ensureSource(topicKey: string, feedUrl: string) {
     return this.prisma.source.upsert({
-      where: { slug: 'google-news-rss' },
-      update: { status: SourceStatus.ACTIVE },
+      where: { slug: `vnexpress-${topicKey}` },
+      update: { status: SourceStatus.ACTIVE, baseUrl: feedUrl },
       create: {
-        name: 'Google News',
-        slug: 'google-news-rss',
+        name: `VnExpress · ${topicKey}`,
+        slug: `vnexpress-${topicKey}`,
         kind: SourceKind.RSS,
-        adapterKey: 'google-news-search-rss',
-        baseUrl: 'https://news.google.com',
+        adapterKey: 'vnexpress-topic-rss',
+        baseUrl: feedUrl,
         status: SourceStatus.ACTIVE,
         defaultIntervalSec: 900,
         rateLimitPerMinute: 30,
-        config: { locale: 'vi', country: 'VN' },
+        config: { locale: 'vi', country: 'VN', topicKey },
       },
     });
   }
 
-  private feedUrl(query: string): string {
-    const parameters = new URLSearchParams({ q: `"${query}" when:7d`, hl: 'vi', gl: 'VN', ceid: 'VN:vi' });
-    return `https://news.google.com/rss/search?${parameters.toString()}`;
+  private feedUrl(topicKey: string): string {
+    const feeds: Record<string, string> = {
+      travel: 'https://vnexpress.net/rss/du-lich.rss',
+      markets: 'https://vnexpress.net/rss/kinh-doanh.rss',
+      technology: 'https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss',
+      career: 'https://vnexpress.net/rss/giao-duc.rss',
+      health: 'https://vnexpress.net/rss/suc-khoe.rss',
+      sports: 'https://vnexpress.net/rss/the-thao.rss',
+      entertainment: 'https://vnexpress.net/rss/giai-tri.rss',
+      products: 'https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss',
+    };
+    return feeds[topicKey] ?? 'https://vnexpress.net/rss/tin-moi-nhat.rss';
   }
 
   private async fetchFeed(url: string): Promise<FeedItem[]> {
@@ -152,7 +164,7 @@ export class IngestionService {
         link,
         guid: this.text(item.guid) || link,
         publishedAt,
-        sourceName: this.clean(this.text(source['#text'])) || 'Google News',
+        sourceName: this.clean(this.text(source['#text'])) || 'VnExpress',
         sourceUrl: this.text(source['@_url']) || undefined,
       }];
     });
@@ -337,10 +349,13 @@ export class IngestionService {
         insight: { include: { insightEvents: { include: { event: true } } } },
       },
     });
-    const relevantCandidates = candidates.filter((candidate) => {
-      const event = candidate.insight.insightEvents[0]?.event;
-      return Boolean(event && candidate.interest && this.matchesInterest(candidate.interest.name, `${event.title} ${event.content}`));
-    });
+    // Events are already assigned through a topic-specific publisher feed and
+    // linked to exactly one user interest. Refinements rank articles during
+    // ingestion; they must not make the brief empty when no headline contains
+    // the user's exact phrase on a given day.
+    const relevantCandidates = candidates.filter((candidate) =>
+      Boolean(candidate.insight.insightEvents[0]?.event && candidate.interest),
+    );
     relevantCandidates.sort((left, right) => {
       const leftDate = left.insight.insightEvents[0]?.event.publishedAt.getTime() ?? 0;
       const rightDate = right.insight.insightEvents[0]?.event.publishedAt.getTime() ?? 0;
@@ -372,7 +387,7 @@ export class IngestionService {
         link: event.url ?? '',
         guid: event.externalId,
         publishedAt: event.publishedAt,
-        sourceName: event.author ?? 'Google News',
+        sourceName: event.author ?? 'VnExpress',
         sourceUrl: typeof metadata.sourceUrl === 'string' ? metadata.sourceUrl : undefined,
       });
     }));
@@ -428,6 +443,33 @@ export class IngestionService {
     if (keywords.length === 0) return false;
     const normalizedContent = this.normalize(content);
     return keywords.some((keyword) => normalizedContent.includes(keyword));
+  }
+
+  private interestSearchTerms(name: string, rawConfig: Prisma.JsonValue): string[] {
+    const config = this.object(rawConfig);
+    const refinements = Array.isArray(config.refinements)
+      ? config.refinements.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      : [];
+    const topicAliases: Record<string, string[]> = {
+      travel: ['Du lịch', 'Travel'],
+      markets: ['Kinh doanh', 'Thị trường', 'Đầu tư', 'Markets'],
+      technology: ['Công nghệ', 'Technology'],
+      career: ['Giáo dục', 'Việc làm', 'Sự nghiệp', 'Career'],
+      health: ['Sức khỏe', 'Health'],
+      sports: ['Thể thao', 'Sports'],
+      entertainment: ['Giải trí', 'Entertainment'],
+      products: ['Sản phẩm', 'Công nghệ', 'Products'],
+    };
+    return [...new Set([name, ...(topicAliases[this.topicKey(rawConfig)] ?? []), ...refinements])];
+  }
+
+  private topicKey(rawConfig: Prisma.JsonValue): string {
+    const value = this.object(rawConfig).topicKey;
+    return typeof value === 'string' && value.length > 0 ? value : 'latest';
+  }
+
+  private matchesAnyTerm(terms: string[], content: string): boolean {
+    return terms.some((term) => this.matchesInterest(term, content));
   }
 
   private normalize(value: string): string {

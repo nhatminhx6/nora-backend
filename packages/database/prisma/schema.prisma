@@ -186,6 +186,7 @@ model RefreshToken {
 model Interest {
   id              String           @id @default(uuid()) @db.Uuid
   userId          String           @map("user_id") @db.Uuid
+  topicKey        String?          @map("topic_key") @db.VarChar(80)
   name            String           @db.VarChar(160)
   normalizedName  String           @map("normalized_name") @db.VarChar(160)
   description     String?          @db.Text
@@ -201,6 +202,7 @@ model Interest {
   watchRules      WatchRule[]
 
   @@unique([userId, normalizedName])
+  @@unique([userId, topicKey])
   @@index([userId, status])
   @@index([type, status])
   @@map("interests")

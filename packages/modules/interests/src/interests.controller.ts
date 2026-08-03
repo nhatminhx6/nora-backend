@@ -9,6 +9,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Interest } from '@prisma/client';
@@ -27,6 +28,12 @@ export class InterestsController {
   @JwtAuthGuard()
   list(@CurrentUser() user: JwtUser): Promise<Interest[]> {
     return this.interestsService.list(user.id);
+  }
+
+  @Get('catalog')
+  @JwtAuthGuard()
+  catalog(@Query('locale') locale?: string) {
+    return this.interestsService.catalog(locale);
   }
 
   @Post()
