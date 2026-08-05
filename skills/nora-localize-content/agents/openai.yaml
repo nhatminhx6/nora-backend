@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Nora Content Localizer'
+  short_description: 'Translate and validate source-grounded Nora content'
+  default_prompt: 'Use $nora-localize-content to translate and quality-check this Nora source content.'

@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Nora Data Curator'
+  short_description: 'Curate credible, traceable daily Nora data'
+  default_prompt: "Use $nora-curate-data to ingest and verify today's credible Nora data."
