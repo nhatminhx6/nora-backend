@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, JwtAuthGuard, JwtUser } from '@nora/auth';
-import { IngestionService } from '@nora/ingestion';
+import { IngestionQueue } from '@nora/ingestion';
 import { ContentService } from './content.service';
 import { UpdateUserInsightDto } from './update-user-insight.dto';
 
@@ -11,13 +11,13 @@ import { UpdateUserInsightDto } from './update-user-insight.dto';
 export class ContentController {
   constructor(
     private readonly contentService: ContentService,
-    private readonly ingestionService: IngestionService,
+    private readonly ingestionQueue: IngestionQueue,
   ) {}
 
   @Post('ingestion/sync')
   @JwtAuthGuard()
-  syncRealData(@CurrentUser() user: JwtUser) {
-    return this.ingestionService.syncUser(user.id);
+  async syncRealData(@CurrentUser() user: JwtUser) {
+    return this.ingestionQueue.enqueueUser(user.id);
   }
 
   @Post('dev/seed')

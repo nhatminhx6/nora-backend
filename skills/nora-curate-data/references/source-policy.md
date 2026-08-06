@@ -16,6 +16,8 @@ Do not publish user-visible content sourced only from social posts, anonymous bl
 - Reject `example.com`, localhost, URL shorteners, search result pages, consent pages, category homepages, and URLs whose final domain differs unexpectedly.
 - Require a publication timestamp or an explicit historical-data exception.
 - Require title and content to describe the linked article.
+- Treat missing or object-shaped RSS fields as invalid input; parsers must return
+  an empty value instead of recursively coercing malformed `#text` nodes.
 
 ## Freshness
 

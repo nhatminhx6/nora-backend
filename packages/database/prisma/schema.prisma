@@ -114,19 +114,19 @@ enum WatchRuleStatus {
 }
 
 model User {
-  id                String            @id @default(uuid()) @db.Uuid
-  email             String            @unique @db.VarChar(320)
-  passwordHash      String?           @map("password_hash") @db.VarChar(255)
-  displayName       String            @map("display_name") @db.VarChar(120)
-  timezone          String            @default("UTC") @db.VarChar(64)
-  locale            String            @default("en") @db.VarChar(16)
-  status            UserStatus        @default(ACTIVE)
-  notificationPrefs Json               @default("{}") @map("notification_prefs") @db.JsonB
-  profileData       Json               @default("{}") @map("profile_data") @db.JsonB
-  lastLoginAt       DateTime?          @map("last_login_at") @db.Timestamptz(3)
-  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt         DateTime?          @map("deleted_at") @db.Timestamptz(3)
+  id                String         @id @default(uuid()) @db.Uuid
+  email             String         @unique @db.VarChar(320)
+  passwordHash      String?        @map("password_hash") @db.VarChar(255)
+  displayName       String         @map("display_name") @db.VarChar(120)
+  timezone          String         @default("UTC") @db.VarChar(64)
+  locale            String         @default("en") @db.VarChar(16)
+  status            UserStatus     @default(ACTIVE)
+  notificationPrefs Json           @default("{}") @map("notification_prefs") @db.JsonB
+  profileData       Json           @default("{}") @map("profile_data") @db.JsonB
+  lastLoginAt       DateTime?      @map("last_login_at") @db.Timestamptz(3)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz(3)
   devices           Device[]
   refreshTokens     RefreshToken[]
   interests         Interest[]
@@ -161,21 +161,21 @@ model Device {
 }
 
 model RefreshToken {
-  id                String         @id @default(uuid()) @db.Uuid
-  userId            String         @map("user_id") @db.Uuid
-  deviceId          String?        @map("device_id") @db.Uuid
-  familyId          String         @map("family_id") @db.Uuid
-  tokenHash         String         @unique @map("token_hash") @db.VarChar(255)
-  expiresAt         DateTime       @map("expires_at") @db.Timestamptz(3)
-  usedAt            DateTime?      @map("used_at") @db.Timestamptz(3)
-  revokedAt         DateTime?      @map("revoked_at") @db.Timestamptz(3)
-  revokeReason      String?        @map("revoke_reason") @db.VarChar(64)
-  replacedByTokenId String?        @unique @map("replaced_by_token_id") @db.Uuid
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  user              User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device            Device?        @relation(fields: [deviceId], references: [id], onDelete: SetNull)
-  replacedByToken   RefreshToken?  @relation("TokenRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
-  replacesToken     RefreshToken?  @relation("TokenRotation")
+  id                String        @id @default(uuid()) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  deviceId          String?       @map("device_id") @db.Uuid
+  familyId          String        @map("family_id") @db.Uuid
+  tokenHash         String        @unique @map("token_hash") @db.VarChar(255)
+  expiresAt         DateTime      @map("expires_at") @db.Timestamptz(3)
+  usedAt            DateTime?     @map("used_at") @db.Timestamptz(3)
+  revokedAt         DateTime?     @map("revoked_at") @db.Timestamptz(3)
+  revokeReason      String?       @map("revoke_reason") @db.VarChar(64)
+  replacedByTokenId String?       @unique @map("replaced_by_token_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  user              User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  device            Device?       @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  replacedByToken   RefreshToken? @relation("TokenRotation", fields: [replacedByTokenId], references: [id], onDelete: SetNull)
+  replacesToken     RefreshToken? @relation("TokenRotation")
 
   @@index([userId, familyId])
   @@index([userId, expiresAt])
@@ -184,22 +184,22 @@ model RefreshToken {
 }
 
 model Interest {
-  id              String           @id @default(uuid()) @db.Uuid
-  userId          String           @map("user_id") @db.Uuid
-  topicKey        String?          @map("topic_key") @db.VarChar(80)
-  name            String           @db.VarChar(160)
-  normalizedName  String           @map("normalized_name") @db.VarChar(160)
-  description     String?          @db.Text
-  type            EntityType
-  status          InterestStatus   @default(ACTIVE)
-  config          Json             @default("{}") @db.JsonB
-  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt       DateTime?        @map("deleted_at") @db.Timestamptz(3)
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String           @id @default(uuid()) @db.Uuid
+  userId           String           @map("user_id") @db.Uuid
+  topicKey         String?          @map("topic_key") @db.VarChar(80)
+  name             String           @db.VarChar(160)
+  normalizedName   String           @map("normalized_name") @db.VarChar(160)
+  description      String?          @db.Text
+  type             EntityType
+  status           InterestStatus   @default(ACTIVE)
+  config           Json             @default("{}") @db.JsonB
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(3)
+  user             User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   interestEntities InterestEntity[]
-  userInsights    UserInsight[]
-  watchRules      WatchRule[]
+  userInsights     UserInsight[]
+  watchRules       WatchRule[]
 
   @@unique([userId, normalizedName])
   @@unique([userId, topicKey])
@@ -246,22 +246,22 @@ model InterestEntity {
 }
 
 model Source {
-  id                  String               @id @default(uuid()) @db.Uuid
-  name                String               @db.VarChar(120)
-  slug                String               @unique @db.VarChar(120)
-  kind                SourceKind
-  adapterKey          String               @map("adapter_key") @db.VarChar(120)
-  baseUrl             String?              @map("base_url") @db.Text
-  status              SourceStatus         @default(ACTIVE)
-  config              Json                 @default("{}") @db.JsonB
-  credentialsRef      String?              @map("credentials_ref") @db.VarChar(255)
-  defaultIntervalSec  Int                  @map("default_interval_sec")
-  rateLimitPerMinute  Int?                 @map("rate_limit_per_minute")
-  lastSyncedAt        DateTime?            @map("last_synced_at") @db.Timestamptz(3)
-  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
-  subscriptions       SourceSubscription[]
-  events              Event[]
+  id                 String               @id @default(uuid()) @db.Uuid
+  name               String               @db.VarChar(120)
+  slug               String               @unique @db.VarChar(120)
+  kind               SourceKind
+  adapterKey         String               @map("adapter_key") @db.VarChar(120)
+  baseUrl            String?              @map("base_url") @db.Text
+  status             SourceStatus         @default(ACTIVE)
+  config             Json                 @default("{}") @db.JsonB
+  credentialsRef     String?              @map("credentials_ref") @db.VarChar(255)
+  defaultIntervalSec Int                  @map("default_interval_sec")
+  rateLimitPerMinute Int?                 @map("rate_limit_per_minute")
+  lastSyncedAt       DateTime?            @map("last_synced_at") @db.Timestamptz(3)
+  createdAt          DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
+  subscriptions      SourceSubscription[]
+  events             Event[]
 
   @@index([status, kind])
   @@index([adapterKey])
@@ -344,20 +344,20 @@ model EventEntity {
 }
 
 model Insight {
-  id              String          @id @default(uuid()) @db.Uuid
+  id              String                @id @default(uuid()) @db.Uuid
   type            InsightType
-  title           String          @db.Text
-  content         String          @db.Text
-  language        String?         @db.VarChar(16)
-  importanceScore Decimal         @map("importance_score") @db.Decimal(5, 4)
-  confidenceScore Decimal?        @map("confidence_score") @db.Decimal(5, 4)
-  modelProvider   String?         @map("model_provider") @db.VarChar(64)
-  modelName       String?         @map("model_name") @db.VarChar(120)
-  promptVersion   String?         @map("prompt_version") @db.VarChar(32)
-  metadata        Json            @default("{}") @db.JsonB
-  generatedAt     DateTime        @default(now()) @map("generated_at") @db.Timestamptz(3)
-  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  title           String                @db.Text
+  content         String                @db.Text
+  language        String?               @db.VarChar(16)
+  importanceScore Decimal               @map("importance_score") @db.Decimal(5, 4)
+  confidenceScore Decimal?              @map("confidence_score") @db.Decimal(5, 4)
+  modelProvider   String?               @map("model_provider") @db.VarChar(64)
+  modelName       String?               @map("model_name") @db.VarChar(120)
+  promptVersion   String?               @map("prompt_version") @db.VarChar(32)
+  metadata        Json                  @default("{}") @db.JsonB
+  generatedAt     DateTime              @default(now()) @map("generated_at") @db.Timestamptz(3)
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
   insightEvents   InsightEvent[]
   insightEntities InsightEntity[]
   userInsights    UserInsight[]
@@ -368,20 +368,28 @@ model Insight {
 }
 
 model InsightLocalization {
-  id               String   @id @default(uuid()) @db.Uuid
-  insightId        String   @map("insight_id") @db.Uuid
-  locale           String   @db.VarChar(2)
-  title            String   @db.Text
-  content          String   @db.Text
-  relevanceReason  String   @map("relevance_reason") @db.Text
-  suggestedAction  String?  @map("suggested_action") @db.Text
-  provider         String?  @db.VarChar(64)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
-  insight          Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  id                String    @id @default(uuid()) @db.Uuid
+  insightId         String    @map("insight_id") @db.Uuid
+  locale            String    @db.VarChar(2)
+  title             String    @db.Text
+  content           String    @db.Text
+  relevanceReason   String    @map("relevance_reason") @db.Text
+  suggestedAction   String?   @map("suggested_action") @db.Text
+  provider          String?   @db.VarChar(64)
+  model             String?   @db.VarChar(120)
+  promptVersion     String?   @map("prompt_version") @db.VarChar(32)
+  sourceContentHash String?   @map("source_content_hash") @db.VarChar(64)
+  validationStatus  String?   @map("validation_status") @db.VarChar(32)
+  qualityScore      Decimal?  @map("quality_score") @db.Decimal(5, 4)
+  generatedAt       DateTime? @map("generated_at") @db.Timestamptz(3)
+  metadata          Json      @default("{}") @db.JsonB
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  insight           Insight   @relation(fields: [insightId], references: [id], onDelete: Cascade)
 
   @@unique([insightId, locale])
   @@index([locale, updatedAt(sort: Desc)])
+  @@index([sourceContentHash, locale, promptVersion])
   @@map("insight_localizations")
 }
 
@@ -398,12 +406,12 @@ model InsightEvent {
 }
 
 model InsightEntity {
-  insightId     String   @map("insight_id") @db.Uuid
-  entityId      String   @map("entity_id") @db.Uuid
-  relevanceScore Decimal @map("relevance_score") @db.Decimal(5, 4)
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  insight       Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
-  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  insightId      String   @map("insight_id") @db.Uuid
+  entityId       String   @map("entity_id") @db.Uuid
+  relevanceScore Decimal  @map("relevance_score") @db.Decimal(5, 4)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  insight        Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  entity         Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
 
   @@id([insightId, entityId])
   @@index([entityId, insightId])
@@ -411,21 +419,21 @@ model InsightEntity {
 }
 
 model UserInsight {
-  id            String            @id @default(uuid()) @db.Uuid
-  userId        String            @map("user_id") @db.Uuid
-  insightId     String            @map("insight_id") @db.Uuid
-  interestId    String?           @map("interest_id") @db.Uuid
-  status        UserInsightStatus @default(UNREAD)
-  relevanceScore Decimal          @map("relevance_score") @db.Decimal(5, 4)
-  matchedReason Json              @default("{}") @map("matched_reason") @db.JsonB
-  seenAt        DateTime?         @map("seen_at") @db.Timestamptz(3)
-  readAt        DateTime?         @map("read_at") @db.Timestamptz(3)
-  createdAt     DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt     DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
-  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  insight       Insight           @relation(fields: [insightId], references: [id], onDelete: Cascade)
-  interest      Interest?         @relation(fields: [interestId], references: [id], onDelete: SetNull)
-  notifications Notification[]
+  id              String            @id @default(uuid()) @db.Uuid
+  userId          String            @map("user_id") @db.Uuid
+  insightId       String            @map("insight_id") @db.Uuid
+  interestId      String?           @map("interest_id") @db.Uuid
+  status          UserInsightStatus @default(UNREAD)
+  relevanceScore  Decimal           @map("relevance_score") @db.Decimal(5, 4)
+  matchedReason   Json              @default("{}") @map("matched_reason") @db.JsonB
+  seenAt          DateTime?         @map("seen_at") @db.Timestamptz(3)
+  readAt          DateTime?         @map("read_at") @db.Timestamptz(3)
+  createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  insight         Insight           @relation(fields: [insightId], references: [id], onDelete: Cascade)
+  interest        Interest?         @relation(fields: [interestId], references: [id], onDelete: SetNull)
+  notifications   Notification[]
   dailyBriefItems DailyBriefItem[]
 
   @@unique([userId, insightId, interestId])
@@ -460,28 +468,28 @@ model WatchRule {
 }
 
 model Notification {
-  id                 String              @id @default(uuid()) @db.Uuid
-  userId             String              @map("user_id") @db.Uuid
-  userInsightId      String?             @map("user_insight_id") @db.Uuid
-  watchRuleId        String?             @map("watch_rule_id") @db.Uuid
-  channel            NotificationChannel
-  status             NotificationStatus  @default(PENDING)
-  title              String              @db.VarChar(255)
-  body               String              @db.Text
-  actionUrl          String?             @map("action_url") @db.Text
-  deduplicationKey   String              @map("deduplication_key") @db.VarChar(255)
-  scheduledAt        DateTime            @map("scheduled_at") @db.Timestamptz(3)
-  sentAt             DateTime?           @map("sent_at") @db.Timestamptz(3)
-  failedAt           DateTime?           @map("failed_at") @db.Timestamptz(3)
-  attemptCount       Int                 @default(0) @map("attempt_count")
-  providerMessageId  String?             @map("provider_message_id") @db.VarChar(255)
-  lastErrorCode      String?             @map("last_error_code") @db.VarChar(64)
-  metadata           Json                @default("{}") @db.JsonB
-  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userInsight        UserInsight?        @relation(fields: [userInsightId], references: [id], onDelete: SetNull)
-  watchRule          WatchRule?          @relation(fields: [watchRuleId], references: [id], onDelete: SetNull)
+  id                String              @id @default(uuid()) @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  userInsightId     String?             @map("user_insight_id") @db.Uuid
+  watchRuleId       String?             @map("watch_rule_id") @db.Uuid
+  channel           NotificationChannel
+  status            NotificationStatus  @default(PENDING)
+  title             String              @db.VarChar(255)
+  body              String              @db.Text
+  actionUrl         String?             @map("action_url") @db.Text
+  deduplicationKey  String              @map("deduplication_key") @db.VarChar(255)
+  scheduledAt       DateTime            @map("scheduled_at") @db.Timestamptz(3)
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(3)
+  failedAt          DateTime?           @map("failed_at") @db.Timestamptz(3)
+  attemptCount      Int                 @default(0) @map("attempt_count")
+  providerMessageId String?             @map("provider_message_id") @db.VarChar(255)
+  lastErrorCode     String?             @map("last_error_code") @db.VarChar(64)
+  metadata          Json                @default("{}") @db.JsonB
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user              User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userInsight       UserInsight?        @relation(fields: [userInsightId], references: [id], onDelete: SetNull)
+  watchRule         WatchRule?          @relation(fields: [watchRuleId], references: [id], onDelete: SetNull)
 
   @@unique([userId, channel, deduplicationKey])
   @@index([status, scheduledAt])
@@ -490,20 +498,20 @@ model Notification {
 }
 
 model DailyBrief {
-  id           String           @id @default(uuid()) @db.Uuid
-  userId       String           @map("user_id") @db.Uuid
-  briefDate    DateTime         @map("brief_date") @db.Date
-  timezone     String           @db.VarChar(64)
-  status       DailyBriefStatus @default(PENDING)
-  title        String           @db.VarChar(255)
-  summary      String?          @db.Text
-  generatedAt  DateTime?        @map("generated_at") @db.Timestamptz(3)
-  failureCode  String?          @map("failure_code") @db.VarChar(64)
-  metadata     Json             @default("{}") @db.JsonB
-  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  items        DailyBriefItem[]
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  briefDate   DateTime         @map("brief_date") @db.Date
+  timezone    String           @db.VarChar(64)
+  status      DailyBriefStatus @default(PENDING)
+  title       String           @db.VarChar(255)
+  summary     String?          @db.Text
+  generatedAt DateTime?        @map("generated_at") @db.Timestamptz(3)
+  failureCode String?          @map("failure_code") @db.VarChar(64)
+  metadata    Json             @default("{}") @db.JsonB
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items       DailyBriefItem[]
 
   @@unique([userId, briefDate])
   @@index([userId, briefDate(sort: Desc)])
