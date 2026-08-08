@@ -19,7 +19,11 @@
         },
         {
           "name": "Data Pipeline Health",
-          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{host}}/health/data-pipeline" }
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "url": "{{host}}/health/data-pipeline"
+          }
         }
       ]
     },
@@ -28,55 +32,79 @@
       "item": [
         {
           "name": "Register",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": [
-              "const body = pm.response.json();",
-              "const auth = body.data || body;",
-              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
-            ] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const auth = body.data || body;",
+                  "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\",\n  \"displayName\": \"Nora User\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\",\n  \"displayName\": \"Nora User\"\n}"
+            },
             "url": "{{host}}/auth/register"
           }
         },
         {
           "name": "Login",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": [
-              "const body = pm.response.json();",
-              "const auth = body.data || body;",
-              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
-            ] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const auth = body.data || body;",
+                  "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\"\n}"
+            },
             "url": "{{host}}/auth/login"
           }
         },
         {
           "name": "Refresh Token",
-          "event": [{
-            "listen": "test",
-            "script": { "type": "text/javascript", "exec": [
-              "const body = pm.response.json();",
-              "const auth = body.data || body;",
-              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
-            ] }
-          }],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "const auth = body.data || body;",
+                  "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+                ]
+              }
+            }
+          ],
           "request": {
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}"
+            },
             "url": "{{host}}/auth/refresh"
           }
         },
@@ -86,7 +114,10 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}"
+            },
             "url": "{{host}}/auth/logout"
           }
         }
@@ -113,7 +144,10 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"displayName\": \"Nora User\",\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"locale\": \"vi\",\n  \"notificationIntensity\": \"balanced\",\n  \"dailyBriefTime\": \"08:00\",\n  \"profession\": \"Mobile Developer\",\n  \"interests\": [\"AI\", \"Crypto\"],\n  \"goals\": [\"Theo dõi tin quan trọng\"],\n  \"locations\": [\"Ho Chi Minh City\"]\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"displayName\": \"Nora User\",\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"locale\": \"vi\",\n  \"notificationIntensity\": \"balanced\",\n  \"dailyBriefTime\": \"08:00\",\n  \"profession\": \"Mobile Developer\",\n  \"interests\": [\"AI\", \"Crypto\"],\n  \"goals\": [\"Theo dõi tin quan trọng\"],\n  \"locations\": [\"Ho Chi Minh City\"]\n}"
+            },
             "url": "{{host}}/users/me"
           }
         },
@@ -133,7 +167,10 @@
             "auth": { "type": "noauth" },
             "method": "POST",
             "description": "Development-only. Restarts onboarding while preserving the active account and its existing feed data.",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
             "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
             "url": "{{host}}/users/onboarding/restart"
           }
@@ -181,7 +218,10 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"topicKey\": \"technology\",\n  \"refinements\": [\"OpenAI\", \"SwiftUI\"],\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topicKey\": \"technology\",\n  \"refinements\": [\"OpenAI\", \"SwiftUI\"],\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}"
+            },
             "url": "{{host}}/interests"
           }
         },
@@ -194,7 +234,10 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"name\": \"AI và công nghệ\",\n  \"status\": \"ACTIVE\",\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"AI và công nghệ\",\n  \"status\": \"ACTIVE\",\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}"
+            },
             "url": "{{host}}/interests/REPLACE_INTEREST_ID"
           }
         },
@@ -231,12 +274,12 @@
           }
         },
         {
-          "name": "Get Daily Brief",
+          "name": "Get Home Feed",
           "request": {
             "auth": { "type": "noauth" },
             "method": "GET",
             "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
-            "url": "{{host}}/briefs/daily?date=2026-08-08&locale=vi"
+            "url": "{{host}}/feed?category=all&page=1&locale=vi"
           }
         },
         {
@@ -257,7 +300,10 @@
               { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
               { "key": "Content-Type", "value": "application/json", "type": "text" }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"READ\",\n  \"isSaved\": true,\n  \"isUseful\": true\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"READ\",\n  \"isSaved\": true,\n  \"isUseful\": true\n}"
+            },
             "url": "{{host}}/user-insights/REPLACE_USER_INSIGHT_ID"
           }
         }

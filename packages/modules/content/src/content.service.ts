@@ -8,6 +8,7 @@ import {
   UserInsightStatus,
 } from '@prisma/client';
 import { PrismaService } from '@nora/database';
+import { categoryLabel } from '@nora/interests/topic-catalog';
 import { UpdateUserInsightDto } from './update-user-insight.dto';
 
 @Injectable()
@@ -139,54 +140,114 @@ export class ContentService {
     });
   }
 
-  async getDailyBrief(userId: string, rawLocale?: string) {
+  async getHomeFeed(userId: string, rawLocale?: string, rawCategory?: string, rawPage?: string) {
     const locale = this.parseLocale(rawLocale);
-    const brief = await this.prisma.dailyBrief.findFirst({
+    const category = rawCategory?.trim() || 'all';
+    const page = this.parsePage(rawPage);
+    const pageSize = 20;
+    const interests = await this.prisma.interest.findMany({
+      where: { userId, status: InterestStatus.ACTIVE, deletedAt: null },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, config: true },
+    });
+    const interestCategories = new Map(
+      interests.map((interest) => {
+        const value = this.asObject(interest.config).category;
+        return [interest.id, typeof value === 'string' ? value : 'other'] as const;
+      }),
+    );
+    const categories = [...new Set(interestCategories.values())];
+    if (category !== 'all' && !categories.includes(category)) {
+      throw new BadRequestException({
+        code: 'INVALID_CATEGORY',
+        message: 'category must be all or one of the user onboarding categories',
+      });
+    }
+    const selectedInterestIds = interests
+      .filter((interest) => category === 'all' || interestCategories.get(interest.id) === category)
+      .map((interest) => interest.id);
+    if (selectedInterestIds.length === 0) return { brief: null };
+
+    const visibleWhere = {
+      userId,
+      status: { not: UserInsightStatus.DISMISSED },
+      interestId: { in: selectedInterestIds },
+      insight: { insightEvents: { some: { event: { status: 'PROCESSED' as const } } } },
+    };
+    const allInterestIds = interests.map((interest) => interest.id);
+    const countsByInterest = await this.prisma.userInsight.groupBy({
+      by: ['interestId'],
+      orderBy: { interestId: 'asc' },
       where: {
         userId,
-        status: DailyBriefStatus.READY,
-        items: { some: { userInsightId: { not: null } } },
+        status: { not: UserInsightStatus.DISMISSED },
+        interestId: { in: allInterestIds },
+        insight: { insightEvents: { some: { event: { status: 'PROCESSED' as const } } } },
       },
-      orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }],
-      include: {
-        items: {
-          orderBy: { position: 'asc' },
-          include: {
-            userInsight: {
-              include: {
-                insight: {
-                  include: {
-                    localizations: { where: { locale } },
-                    insightEvents: { include: { event: true } },
-                  },
-                },
-                interest: true,
-              },
+      _count: { interestId: true },
+    });
+    const [rows, total, latestBrief] = await this.prisma.$transaction([
+      this.prisma.userInsight.findMany({
+        where: visibleWhere,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          insight: {
+            include: {
+              localizations: { where: { locale } },
+              insightEvents: { include: { event: true } },
             },
           },
+          interest: true,
         },
-      },
-    });
-    if (!brief) {
-      return { brief: null };
-    }
-    const insights = brief.items.flatMap((item) =>
-      item.userInsight ? [this.mapInsight(item.userInsight, locale)] : [],
-    );
+      }),
+      this.prisma.userInsight.count({ where: visibleWhere }),
+      this.prisma.dailyBrief.findFirst({
+        where: { userId, status: DailyBriefStatus.READY },
+        orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }],
+        select: { id: true, briefDate: true },
+      }),
+    ]);
+    const insights = rows.map((row) => this.mapInsight(row, locale));
     const importantInsights = insights.filter((item) => item.type !== 'informational');
     const otherInsights = insights.filter((item) => item.type === 'informational');
+    const counts = new Map<string, number>();
+    for (const row of countsByInterest) {
+      if (!row.interestId) continue;
+      const itemCategory = interestCategories.get(row.interestId) ?? 'other';
+      counts.set(itemCategory, (counts.get(itemCategory) ?? 0) + row._count.interestId);
+    }
+    const allCount = [...counts.values()].reduce((sum, count) => sum + count, 0);
+    const filters = [
+      { key: 'all', title: locale === 'vi' ? 'Tất cả' : 'All', count: allCount },
+      ...categories.map((item) => ({
+        key: item,
+        title: categoryLabel(item, locale),
+        count: counts.get(item) ?? 0,
+      })),
+    ];
     return {
       brief: {
-        id: brief.id,
-        date: brief.briefDate,
+        id: latestBrief?.id ?? userId,
+        date: latestBrief?.briefDate ?? new Date(),
         headline:
           locale === 'vi'
-            ? `${insights.length} cập nhật đáng chú ý từ các chủ đề anh theo dõi`
-            : `${insights.length} updates worth your attention from tracked topics`,
+            ? `${allCount} cập nhật từ các chủ đề anh theo dõi`
+            : `${allCount} updates from tracked topics`,
         importantInsights,
         otherInsights,
         upcomingItems: [],
-        freshness: { servedDate: brief.briefDate },
+        filters,
+        groups: [],
+        selectedCategory: category,
+        pagination: {
+          page,
+          pageSize,
+          total,
+          totalPages: Math.ceil(total / pageSize),
+          hasNextPage: page * pageSize < total,
+        },
       },
     };
   }
@@ -327,6 +388,17 @@ export class ContentService {
       });
     }
     return rawLocale;
+  }
+
+  private parsePage(rawPage?: string): number {
+    const page = Number(rawPage ?? '1');
+    if (!Number.isInteger(page) || page < 1) {
+      throw new BadRequestException({
+        code: 'INVALID_PAGE',
+        message: 'page must be an integer greater than or equal to 1',
+      });
+    }
+    return page;
   }
 
   private asObject(value: unknown): Record<string, unknown> {

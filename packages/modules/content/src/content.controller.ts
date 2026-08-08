@@ -26,10 +26,15 @@ export class ContentController {
     return this.contentService.seedDevelopmentData(user.id, date);
   }
 
-  @Get('briefs/daily')
+  @Get('feed')
   @JwtAuthGuard()
-  getDailyBrief(@CurrentUser() user: JwtUser, @Query('locale') locale?: string) {
-    return this.contentService.getDailyBrief(user.id, locale);
+  getHomeFeed(
+    @CurrentUser() user: JwtUser,
+    @Query('locale') locale?: string,
+    @Query('category') category?: string,
+    @Query('page') page?: string,
+  ) {
+    return this.contentService.getHomeFeed(user.id, locale, category, page);
   }
 
   @Get('interests/:id/insights')

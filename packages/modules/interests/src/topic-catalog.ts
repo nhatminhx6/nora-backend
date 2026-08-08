@@ -2,6 +2,21 @@ import { EntityType } from '@prisma/client';
 
 export type SupportedLocale = 'vi' | 'en';
 
+export const CATEGORY_LABELS: Record<string, Record<SupportedLocale, string>> = {
+  investments: { vi: 'Đầu tư', en: 'Investments' },
+  work: { vi: 'Công việc', en: 'Work' },
+  sports: { vi: 'Thể thao', en: 'Sports' },
+  entertainment: { vi: 'Giải trí', en: 'Entertainment' },
+  travel: { vi: 'Du lịch', en: 'Travel' },
+  purchases: { vi: 'Mua sắm', en: 'Purchases' },
+  health: { vi: 'Sức khỏe', en: 'Health' },
+  other: { vi: 'Khác', en: 'Other' },
+};
+
+export function categoryLabel(category: string, locale: SupportedLocale): string {
+  return CATEGORY_LABELS[category]?.[locale] ?? category;
+}
+
 export interface TopicDefinition {
   key: string;
   type: EntityType;

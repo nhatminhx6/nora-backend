@@ -95,7 +95,6 @@ export class IngestionService {
             nextSyncAt: new Date(Date.now() + source.defaultIntervalSec * 1000),
           },
         });
-        const freshnessCutoff = Date.now() - 7 * 24 * 3_600_000;
         let fetchedItems = feedCache.get(feedUrl);
         if (!fetchedItems) {
           const payloads = await this.rssAdapter.fetch({ url: feedUrl });
@@ -109,14 +108,13 @@ export class IngestionService {
           feedCache.set(feedUrl, fetchedItems);
         }
         const items = fetchedItems
-          .filter((item) => item.publishedAt.getTime() >= freshnessCutoff)
           .filter(
             (item) =>
               profile.scopedToInterest ||
               this.matchesAnyTerm(searchTerms, `${item.title} ${item.content}`),
           )
           .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime());
-        for (const item of items.slice(0, 4)) {
+        for (const item of items) {
           if (!item.metadata.verifiedAt) {
             const validation = await this.rssAdapter.validate(item);
             if (!validation.valid || !validation.canonicalUrl || !validation.verifiedAt) {
