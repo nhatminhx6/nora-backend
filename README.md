@@ -53,4 +53,6 @@ locale to every API request automatically.
 
 `DELETE /v1/users/account` deletes an account using its registered email without authentication. It exists only to support local development and returns `404 ROUTE_NOT_FOUND` when `NODE_ENV=production`.
 
+`POST /v1/users/onboarding/restart` accepts `{ "email": "user@example.com" }` without authentication and restarts onboarding while preserving the account's interests, insights, and previous daily briefs. It is development-only and disabled in production.
+
 > **TODO before production deployment:** Remove the public email-based account deletion endpoint and replace it with an authenticated, ownership-verified deletion flow.

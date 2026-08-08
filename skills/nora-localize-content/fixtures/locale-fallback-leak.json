@@ -1,0 +1,20 @@
+{
+  "failureCodes": ["LOCALE_FALLBACK_LEAK", "INTERNAL_METADATA_LEAK"],
+  "source": {
+    "language": "en",
+    "title": "Asset leads weekly losses as a policy vote is delayed",
+    "content": "The asset fell 5.5% on the week while lawmakers left without taking up the bill."
+  },
+  "requestedLocale": "vi",
+  "badOutput": {
+    "title": "Asset leads weekly losses as a policy vote is delayed",
+    "relevanceReason": "rss_term_match",
+    "fallbackMarked": false
+  },
+  "expected": {
+    "publishLocalizedTextOnlyWhenValidated": true,
+    "fallbackMustExposeRequestedAndServedLocale": true,
+    "internalMatchingCodesMustNotBeUserVisible": true,
+    "preservedValues": ["5.5%"]
+  }
+}

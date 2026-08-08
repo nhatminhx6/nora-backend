@@ -304,7 +304,7 @@ model Event {
   title                String              @db.Text
   content              String              @db.Text
   summary              String?             @db.Text
-  url                  String?             @db.Text
+  url                  String?             @unique @db.Text
   author               String?             @db.VarChar(255)
   language             String?             @db.VarChar(16)
   publishedAt          DateTime            @map("published_at") @db.Timestamptz(3)
@@ -362,6 +362,7 @@ model Insight {
   insightEntities InsightEntity[]
   userInsights    UserInsight[]
   localizations   InsightLocalization[]
+  localizationRevisions InsightLocalizationRevision[]
 
   @@index([type, generatedAt(sort: Desc)])
   @@map("insights")
@@ -391,6 +392,52 @@ model InsightLocalization {
   @@index([locale, updatedAt(sort: Desc)])
   @@index([sourceContentHash, locale, promptVersion])
   @@map("insight_localizations")
+}
+
+model InsightLocalizationRevision {
+  id                String   @id @default(uuid()) @db.Uuid
+  insightId         String   @map("insight_id") @db.Uuid
+  locale            String   @db.VarChar(2)
+  title             String   @db.Text
+  content           String   @db.Text
+  relevanceReason   String   @map("relevance_reason") @db.Text
+  suggestedAction   String?  @map("suggested_action") @db.Text
+  provider          String   @db.VarChar(64)
+  model             String   @db.VarChar(120)
+  promptVersion     String   @map("prompt_version") @db.VarChar(32)
+  sourceContentHash String   @map("source_content_hash") @db.VarChar(64)
+  validationStatus  String   @map("validation_status") @db.VarChar(32)
+  qualityScore      Decimal  @map("quality_score") @db.Decimal(5, 4)
+  failureReasons    String[] @default([]) @map("failure_reasons")
+  evidence          Json     @default("[]") @db.JsonB
+  correctionReason  String?  @map("correction_reason") @db.VarChar(120)
+  metadata          Json     @default("{}") @db.JsonB
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  insight           Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
+
+  @@unique([insightId, locale, sourceContentHash, promptVersion])
+  @@index([locale, validationStatus, createdAt(sort: Desc)])
+  @@map("insight_localization_revisions")
+}
+
+model PipelineRun {
+  id             String    @id @default(uuid()) @db.Uuid
+  pipeline       String    @db.VarChar(40)
+  status         String    @db.VarChar(24)
+  sourceId       String?   @map("source_id") @db.Uuid
+  insightId      String?   @map("insight_id") @db.Uuid
+  locale         String?   @db.VarChar(16)
+  processedCount Int       @default(0) @map("processed_count")
+  rejectedCount  Int       @default(0) @map("rejected_count")
+  errorCode      String?   @map("error_code") @db.VarChar(80)
+  durationMs     Int?      @map("duration_ms")
+  metadata       Json      @default("{}") @db.JsonB
+  startedAt      DateTime  @default(now()) @map("started_at") @db.Timestamptz(3)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  @@index([pipeline, status, startedAt(sort: Desc)])
+  @@index([errorCode, startedAt(sort: Desc)])
+  @@map("pipeline_runs")
 }
 
 model InsightEvent {

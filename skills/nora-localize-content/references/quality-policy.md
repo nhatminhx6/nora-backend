@@ -22,6 +22,17 @@
 - Generate once per unique source content hash and locale.
 - Prefer a lower-cost capable model for ordinary translation.
 - Route high-importance or high-stakes content to a stronger model and an independent verifier pass.
-- Use BullMQ job identity `localize:{insightId}:{locale}:{sourceContentHash}:{promptVersion}`.
+- Use logical job identity `localize:{insightId}:{locale}:{sourceContentHash}:{promptVersion}`.
+  Encode separators as hyphens in BullMQ custom job IDs because BullMQ reserves colons.
 - Apply provider rate limits, retries with backoff, timeout, circuit breaker, and dead-letter inspection.
 - Never publish fallback-original under a requested locale without an explicit fallback marker.
+- API responses that use source-language content because a requested localization
+  is unavailable must expose `requestedLocale`, `servedLocale`, and `fallback: true`.
+- Treat provider `HTTP 429` as retryable with bounded exponential backoff and
+  rate limiting; after retries, keep the localization unpublished rather than
+  serving it under the requested locale label.
+- Failed localization must create a delayed retry job independent of source
+  crawling. Internal matching codes such as `RSS_TERM_MATCH` are metadata and
+  must be converted to locale-appropriate user copy at the API boundary.
+- Localization retry backoff must be longer than the provider circuit-breaker
+  window so attempts are not exhausted while the circuit is still open.

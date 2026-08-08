@@ -14,5 +14,9 @@ Use one or more stable codes when recording a defect:
 - `ACTION_OVERREACH`: suggested action becomes financial, medical, legal, or safety advice.
 - `EVIDENCE_MISSING`: material claim has no exact source evidence span.
 - `SCHEMA_INVALID`: structured output is incomplete or malformed.
+- `INTERNAL_METADATA_LEAK`: a matching code, queue code, provider error, prompt
+  identifier, or other implementation detail is rendered as user-visible copy.
+- `PROVIDER_UNAVAILABLE`: the configured localization provider is missing credentials,
+  rate-limited, timed out, or opened its circuit breaker; keep output unpublished.
 
 For every confirmed defect, retain the source hash, bad output, expected behavior, code, prompt version, provider/model, and correction reason in a regression fixture or database evaluation record.

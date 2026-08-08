@@ -1,0 +1,267 @@
+{
+  "info": {
+    "_postman_id": "b4dfafbf-b71e-40b6-a931-92c962c76a9e",
+    "name": "Nora Backend API",
+    "description": "Nora REST API. Import this single file, then run Login to populate the collection token automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "host", "value": "http://localhost:3000/v1" },
+    { "key": "token", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{host}}/health" }
+        },
+        {
+          "name": "Data Pipeline Health",
+          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{host}}/health/data-pipeline" }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const body = pm.response.json();",
+              "const auth = body.data || body;",
+              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+            ] }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\",\n  \"displayName\": \"Nora User\"\n}" },
+            "url": "{{host}}/auth/register"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const body = pm.response.json();",
+              "const auth = body.data || body;",
+              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+            ] }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\"\n}" },
+            "url": "{{host}}/auth/login"
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "event": [{
+            "listen": "test",
+            "script": { "type": "text/javascript", "exec": [
+              "const body = pm.response.json();",
+              "const auth = body.data || body;",
+              "if (auth.accessToken) pm.collectionVariables.set('token', auth.accessToken);"
+            ] }
+          }],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}" },
+            "url": "{{host}}/auth/refresh"
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}" },
+            "url": "{{host}}/auth/logout"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/users/me"
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"displayName\": \"Nora User\",\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"locale\": \"vi\",\n  \"notificationIntensity\": \"balanced\",\n  \"dailyBriefTime\": \"08:00\",\n  \"profession\": \"Mobile Developer\",\n  \"interests\": [\"AI\", \"Crypto\"],\n  \"goals\": [\"Theo dõi tin quan trọng\"],\n  \"locations\": [\"Ho Chi Minh City\"]\n}" },
+            "url": "{{host}}/users/me"
+          }
+        },
+        {
+          "name": "Clear My Data - Restart Onboarding",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "description": "Destructive: clears personalized data but keeps the account and current session.",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/users/me/data"
+          }
+        },
+        {
+          "name": "Restart Onboarding by Email - Development Only",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "description": "Development-only. Restarts onboarding while preserving the active account and its existing feed data.",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "url": "{{host}}/users/onboarding/restart"
+          }
+        },
+        {
+          "name": "Delete Account by Email - Development Only",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "description": "Destructive and development-only. Disabled by the backend in production.",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "url": "{{host}}/users/account"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interests",
+      "item": [
+        {
+          "name": "List Interests",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/interests"
+          }
+        },
+        {
+          "name": "Get Interest Catalog",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/interests/catalog?locale=vi"
+          }
+        },
+        {
+          "name": "Create Interest",
+          "request": {
+            "method": "POST",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"topicKey\": \"technology\",\n  \"refinements\": [\"OpenAI\", \"SwiftUI\"],\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}" },
+            "url": "{{host}}/interests"
+          }
+        },
+        {
+          "name": "Update Interest",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"AI và công nghệ\",\n  \"status\": \"ACTIVE\",\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}" },
+            "url": "{{host}}/interests/REPLACE_INTEREST_ID"
+          }
+        },
+        {
+          "name": "Delete Interest",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/interests/REPLACE_INTEREST_ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content",
+      "item": [
+        {
+          "name": "Queue Real Data Sync",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/ingestion/sync"
+          }
+        },
+        {
+          "name": "Seed Development Data",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/dev/seed?date=2026-08-08"
+          }
+        },
+        {
+          "name": "Get Daily Brief",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/briefs/daily?date=2026-08-08&locale=vi"
+          }
+        },
+        {
+          "name": "Get Interest Insights",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/interests/REPLACE_INTEREST_ID/insights?locale=vi"
+          }
+        },
+        {
+          "name": "Update User Insight",
+          "request": {
+            "method": "PATCH",
+            "auth": { "type": "noauth" },
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"READ\",\n  \"isSaved\": true,\n  \"isUseful\": true\n}" },
+            "url": "{{host}}/user-insights/REPLACE_USER_INSIGHT_ID"
+          }
+        }
+      ]
+    }
+  ]
+}

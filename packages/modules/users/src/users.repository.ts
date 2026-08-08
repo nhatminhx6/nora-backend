@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma, User, UserStatus } from '@prisma/client';
 import { PrismaService } from '@nora/database';
+import type { ResetAccountDataResult, RestartOnboardingResult } from './users.service';
 
 @Injectable()
 export class UsersRepository {
@@ -64,5 +65,79 @@ export class UsersRepository {
       });
       return true;
     });
+  }
+
+  async resetAccountData(userId: string): Promise<ResetAccountDataResult> {
+    return this.prisma.$transaction(async (transaction) => {
+      const interests = await transaction.interest.findMany({
+        where: { userId },
+        select: { id: true },
+      });
+
+      // Subscriptions are configured per interest but intentionally do not have a
+      // direct FK to interests because their events are shared globally.
+      let sourceSubscriptions = 0;
+      for (const interest of interests) {
+        const deleted = await transaction.sourceSubscription.deleteMany({
+          where: { config: { path: ['interestId'], equals: interest.id } },
+        });
+        sourceSubscriptions += deleted.count;
+      }
+
+      const notifications = await transaction.notification.deleteMany({ where: { userId } });
+      const dailyBriefs = await transaction.dailyBrief.deleteMany({ where: { userId } });
+      const watchRules = await transaction.watchRule.deleteMany({ where: { userId } });
+      const userInsights = await transaction.userInsight.deleteMany({ where: { userId } });
+      const deletedInterests = await transaction.interest.deleteMany({ where: { userId } });
+
+      await transaction.user.update({
+        where: { id: userId },
+        data: {
+          profileData: {
+            onboardingCompleted: false,
+            onboardingRestartToken: `${Date.now()}-${userId}`,
+          },
+          notificationPrefs: {},
+        },
+      });
+
+      return {
+        onboardingRequired: true,
+        cleared: {
+          interests: deletedInterests.count,
+          userInsights: userInsights.count,
+          notifications: notifications.count,
+          dailyBriefs: dailyBriefs.count,
+          watchRules: watchRules.count,
+          sourceSubscriptions,
+        },
+      };
+    });
+  }
+
+  async restartOnboarding(userId: string): Promise<RestartOnboardingResult> {
+    const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    const profileData =
+      typeof user.profileData === 'object' &&
+      user.profileData !== null &&
+      !Array.isArray(user.profileData)
+        ? user.profileData
+        : {};
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        profileData: {
+          ...profileData,
+          onboardingCompleted: false,
+          onboardingRestartToken: `${Date.now()}-${userId}`,
+        },
+      },
+    });
+
+    return {
+      onboardingRequired: true,
+      preservedExistingData: true,
+    };
   }
 }

@@ -19,6 +19,8 @@
     "start:prod:worker": "node dist/apps/worker/src/main.js",
     "start:prod:scheduler": "node dist/apps/scheduler/src/main.js",
     "typecheck": "tsc --noEmit",
+    "test:prepare-data": "node --test --require ts-node/register packages/modules/ingestion/test/*.test.ts",
+    "test:postman": "node scripts/validate-postman-collection.mjs",
     "format": "prettier --write \"{apps,packages}/**/*.ts\" \"*.{json,yml}\"",
     "prisma:generate": "prisma generate --schema packages/database/prisma/schema.prisma",
     "prisma:validate": "prisma validate --schema packages/database/prisma/schema.prisma",

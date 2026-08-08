@@ -1,7 +1,21 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsArray, IsIn, IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsIn,
+  IsOptional,
+  IsString,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
 export class UpdateProfileDto {
+  @ApiPropertyOptional({ description: 'Server-authoritative onboarding completion state' })
+  @IsOptional()
+  @IsBoolean({ message: 'onboardingCompleted must be a boolean' })
+  onboardingCompleted?: boolean;
+
   @ApiPropertyOptional({ example: 'Nora User' })
   @IsOptional()
   @IsString({ message: 'displayName must be a string' })

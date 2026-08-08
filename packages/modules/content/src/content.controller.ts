@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, JwtAuthGuard, JwtUser } from '@nora/auth';
-import { IngestionQueue } from '@nora/ingestion';
+import { IngestionService } from '@nora/ingestion';
 import { ContentService } from './content.service';
 import { UpdateUserInsightDto } from './update-user-insight.dto';
 
@@ -11,13 +11,13 @@ import { UpdateUserInsightDto } from './update-user-insight.dto';
 export class ContentController {
   constructor(
     private readonly contentService: ContentService,
-    private readonly ingestionQueue: IngestionQueue,
+    private readonly ingestionService: IngestionService,
   ) {}
 
   @Post('ingestion/sync')
   @JwtAuthGuard()
   async syncRealData(@CurrentUser() user: JwtUser) {
-    return this.ingestionQueue.enqueueUser(user.id);
+    return this.ingestionService.syncUser(user.id);
   }
 
   @Post('dev/seed')
@@ -28,12 +28,8 @@ export class ContentController {
 
   @Get('briefs/daily')
   @JwtAuthGuard()
-  getDailyBrief(
-    @CurrentUser() user: JwtUser,
-    @Query('locale') locale?: string,
-    @Query('date') date?: string,
-  ) {
-    return this.contentService.getDailyBrief(user.id, locale, date);
+  getDailyBrief(@CurrentUser() user: JwtUser, @Query('locale') locale?: string) {
+    return this.contentService.getDailyBrief(user.id, locale);
   }
 
   @Get('interests/:id/insights')

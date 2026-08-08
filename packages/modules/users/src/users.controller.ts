@@ -1,5 +1,11 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Patch } from '@nestjs/common';
-import { ApiBearerAuth, ApiNoContentResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Patch, Post } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiNoContentResponse,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { CurrentUser, JwtAuthGuard, JwtUser } from '@nora/auth';
 import { DeleteAccountDto } from './dto/delete-account.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -21,6 +27,22 @@ export class UsersController {
   @JwtAuthGuard()
   updateMe(@CurrentUser() user: JwtUser, @Body() dto: UpdateProfileDto): Promise<UserProfile> {
     return this.usersService.updateProfile(user.id, dto);
+  }
+
+  @Delete('me/data')
+  @JwtAuthGuard()
+  @ApiOperation({ summary: 'Clear personalized account data and restart onboarding' })
+  @ApiOkResponse({ description: 'Personalized data cleared; authentication remains valid' })
+  resetMyData(@CurrentUser() user: JwtUser) {
+    return this.usersService.resetAccountData(user.id);
+  }
+
+  @Post('onboarding/restart')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: '[Development only] Restart onboarding by email' })
+  @ApiOkResponse({ description: 'Personalized data cleared; account remains active' })
+  restartOnboarding(@Body() dto: DeleteAccountDto) {
+    return this.usersService.restartOnboardingByEmail(dto.email);
   }
 
   @Delete('account')

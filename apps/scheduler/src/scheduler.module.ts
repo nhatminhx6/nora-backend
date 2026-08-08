@@ -6,7 +6,12 @@ import { IngestionModule } from '@nora/ingestion';
 import { IngestionJob } from './ingestion.job';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), ScheduleModule.forRoot(), DatabaseModule, IngestionModule],
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
+    DatabaseModule,
+    IngestionModule,
+  ],
   providers: [IngestionJob],
 })
 export class SchedulerModule {}

@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Interest, Prisma } from '@prisma/client';
 import { CreateInterestDto } from './dto/create-interest.dto';
 import { UpdateInterestDto } from './dto/update-interest.dto';
@@ -30,9 +35,14 @@ export class InterestsService {
     const topicKey = dto.topicKey.trim().toLocaleLowerCase('en-US');
     const topic = TOPIC_CATALOG.find((item) => item.key === topicKey);
     if (!topic) {
-      throw new BadRequestException({ code: 'INVALID_TOPIC_KEY', message: 'topicKey must come from the topic catalog' });
+      throw new BadRequestException({
+        code: 'INVALID_TOPIC_KEY',
+        message: 'topicKey must come from the topic catalog',
+      });
     }
-    const refinements = [...new Set((dto.refinements ?? []).map((value) => value.trim()).filter(Boolean))];
+    const refinements = [
+      ...new Set((dto.refinements ?? []).map((value) => value.trim()).filter(Boolean)),
+    ];
     const name = topic.names.en;
     const clientConfig = dto.config ?? {};
     try {
@@ -59,7 +69,10 @@ export class InterestsService {
 
   async update(userId: string, id: string, dto: UpdateInterestDto): Promise<Interest> {
     if (!(await this.interestsRepository.findOwned(id, userId))) {
-      throw new NotFoundException({ code: 'INTEREST_NOT_FOUND', message: 'Interest was not found' });
+      throw new NotFoundException({
+        code: 'INTEREST_NOT_FOUND',
+        message: 'Interest was not found',
+      });
     }
     const name = dto.name?.trim();
     try {
@@ -78,7 +91,10 @@ export class InterestsService {
 
   async remove(userId: string, id: string): Promise<void> {
     if (!(await this.interestsRepository.archive(id, userId))) {
-      throw new NotFoundException({ code: 'INTEREST_NOT_FOUND', message: 'Interest was not found' });
+      throw new NotFoundException({
+        code: 'INTEREST_NOT_FOUND',
+        message: 'Interest was not found',
+      });
     }
   }
 

@@ -18,6 +18,18 @@ Do not publish user-visible content sourced only from social posts, anonymous bl
 - Require title and content to describe the linked article.
 - Treat missing or object-shaped RSS fields as invalid input; parsers must return
   an empty value instead of recursively coercing malformed `#text` nodes.
+- Feed adapters must support both RSS (`channel.item`, `pubDate`, text links) and
+  Atom (`feed.entry`, `updated`, link `href`) without treating enclosure/media
+  links as canonical articles.
+- Keep full extracted article text on the event, but pass a bounded source-faithful
+  summary to translation providers that use query-string APIs; never retry an
+  `HTTP 414` by silently truncating arbitrary encoded bytes.
+- Store full publisher text only when the source license or API terms permit it.
+  Otherwise retain the publisher-provided excerpt, normalized metadata, URL and
+  content hash. Record the retention basis in source configuration.
+- A publisher returning `HTTP 403` to the article verifier remains rejected even
+  when its RSS feed is accessible. RSS availability does not satisfy the clickable
+  article requirement.
 
 ## Freshness
 

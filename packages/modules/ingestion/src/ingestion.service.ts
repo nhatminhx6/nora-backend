@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   DailyBriefStatus,
   EventStatus,
@@ -13,10 +13,17 @@ import {
 import { PrismaService } from '@nora/database';
 import { NormalizedSourceItem } from './source-adapter';
 import { RssSourceAdapter } from './rss-source.adapter';
+import { SourceProfile, sourceProfile } from './source-profile';
+import { TRANSLATION_PROVIDER, TranslationProvider } from './translation-provider';
+import { IngestionQueue } from './ingestion.queue';
+import { LocalizationQualityValidator } from './localization-quality.validator';
 
 type FeedItem = NormalizedSourceItem;
 
 type SupportedLocale = 'vi' | 'en';
+
+const DAILY_BRIEF_ITEM_LIMIT = 10;
+const LOCALIZATION_PROMPT_VERSION = 'localization-quality-v2';
 
 interface LocalizedInsight {
   locale: SupportedLocale;
@@ -39,6 +46,9 @@ export class IngestionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rssAdapter: RssSourceAdapter,
+    @Inject(TRANSLATION_PROVIDER) private readonly translationProvider: TranslationProvider,
+    private readonly ingestionQueue: IngestionQueue,
+    private readonly localizationValidator: LocalizationQualityValidator,
   ) {}
 
   async syncUser(
@@ -61,9 +71,10 @@ export class IngestionService {
     for (const interest of interests) {
       try {
         const searchTerms = this.interestSearchTerms(interest.name, interest.config);
-        const topicKey = this.topicKey(interest.config);
-        const feedUrl = this.feedUrl(topicKey);
-        const source = await this.ensureSource(topicKey, feedUrl);
+        const topicKey = interest.topicKey ?? this.topicKey(interest.config);
+        const profile = sourceProfile(topicKey);
+        const feedUrl = profile.feedUrl;
+        const source = await this.ensureSource(topicKey, profile);
         const subscription = await this.prisma.sourceSubscription.upsert({
           where: {
             sourceId_subscriptionKey: {
@@ -73,14 +84,14 @@ export class IngestionService {
           },
           update: {
             status: SubscriptionStatus.ACTIVE,
-            config: { interestId: interest.id, feedUrl },
+            config: { interestId: interest.id, feedUrl, adapterKey: profile.adapterKey },
             nextSyncAt: new Date(Date.now() + source.defaultIntervalSec * 1000),
           },
           create: {
             sourceId: source.id,
             subscriptionKey: `interest:${interest.id}`,
             status: SubscriptionStatus.ACTIVE,
-            config: { interestId: interest.id, feedUrl },
+            config: { interestId: interest.id, feedUrl, adapterKey: profile.adapterKey },
             nextSyncAt: new Date(Date.now() + source.defaultIntervalSec * 1000),
           },
         });
@@ -90,30 +101,41 @@ export class IngestionService {
           const payloads = await this.rssAdapter.fetch({ url: feedUrl });
           fetchedItems = payloads.flatMap((payload) => {
             const item = this.rssAdapter.normalize(payload);
-            return item ? [item] : [];
+            if (!item) return [];
+            item.publisher = profile.name;
+            item.language = profile.locale;
+            return [item];
           });
           feedCache.set(feedUrl, fetchedItems);
         }
         const items = fetchedItems
           .filter((item) => item.publishedAt.getTime() >= freshnessCutoff)
-          .filter((item) => this.matchesAnyTerm(searchTerms, `${item.title} ${item.content}`))
+          .filter(
+            (item) =>
+              profile.scopedToInterest ||
+              this.matchesAnyTerm(searchTerms, `${item.title} ${item.content}`),
+          )
           .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime());
         for (const item of items.slice(0, 4)) {
-          const validation = await this.rssAdapter.validate(item);
-          if (!validation.valid || !validation.canonicalUrl || !validation.verifiedAt) {
-            this.logger.warn(
-              `Rejected RSS item ${item.externalId}: ${validation.errors.join(',')}`,
-            );
-            continue;
+          if (!item.metadata.verifiedAt) {
+            const validation = await this.rssAdapter.validate(item);
+            if (!validation.valid || !validation.canonicalUrl || !validation.verifiedAt) {
+              await this.rejectExistingEvent(source.id, item, validation.errors);
+              this.logger.warn(
+                `Rejected RSS item ${item.externalId}: ${validation.errors.join(',')}`,
+              );
+              continue;
+            }
+            item.canonicalUrl = validation.canonicalUrl;
+            item.metadata.verifiedAt = validation.verifiedAt.toISOString();
           }
-          item.canonicalUrl = validation.canonicalUrl;
-          item.metadata.verifiedAt = validation.verifiedAt.toISOString();
           const result = await this.persistItem({
             userId,
             interestId: interest.id,
             sourceId: source.id,
             subscriptionId: subscription.id,
             item,
+            sourceTier: profile.sourceTier,
           });
           eventCount += result.eventCreated ? 1 : 0;
           insightCount += result.insightCreated ? 1 : 0;
@@ -143,6 +165,7 @@ export class IngestionService {
   }
 
   async syncAllUsers(): Promise<void> {
+    const startedAt = Date.now();
     const users = await this.prisma.user.findMany({
       where: {
         status: 'ACTIVE',
@@ -151,42 +174,67 @@ export class IngestionService {
       },
       select: { id: true },
     });
+    let processedCount = 0;
+    let rejectedCount = 0;
     const feedCache = new Map<string, FeedItem[]>();
     for (const user of users) {
-      await this.syncUserWithCache(user.id, feedCache);
+      try {
+        const result = await this.syncUserWithCache(user.id, feedCache);
+        processedCount += result.events;
+      } catch (error) {
+        rejectedCount += 1;
+        this.logger.error(
+          `Source-centric sync failed for user ${user.id}: ${error instanceof Error ? error.message : 'unknown error'}`,
+        );
+      }
     }
-  }
-
-  private async ensureSource(topicKey: string, feedUrl: string) {
-    return this.prisma.source.upsert({
-      where: { slug: `vnexpress-${topicKey}` },
-      update: { status: SourceStatus.ACTIVE, baseUrl: feedUrl },
-      create: {
-        name: `VnExpress · ${topicKey}`,
-        slug: `vnexpress-${topicKey}`,
-        kind: SourceKind.RSS,
-        adapterKey: 'vnexpress-topic-rss',
-        baseUrl: feedUrl,
-        status: SourceStatus.ACTIVE,
-        defaultIntervalSec: 900,
-        rateLimitPerMinute: 30,
-        config: { locale: 'vi', country: 'VN', topicKey },
+    await this.prisma.pipelineRun.create({
+      data: {
+        pipeline: 'source-sync',
+        status: rejectedCount === 0 ? 'SUCCEEDED' : 'PARTIAL',
+        processedCount,
+        rejectedCount,
+        durationMs: Date.now() - startedAt,
+        completedAt: new Date(),
+        metadata: { users: users.length, uniqueFeedsFetched: feedCache.size },
       },
     });
   }
 
-  private feedUrl(topicKey: string): string {
-    const feeds: Record<string, string> = {
-      travel: 'https://vnexpress.net/rss/du-lich.rss',
-      markets: 'https://vnexpress.net/rss/kinh-doanh.rss',
-      technology: 'https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss',
-      career: 'https://vnexpress.net/rss/giao-duc.rss',
-      health: 'https://vnexpress.net/rss/suc-khoe.rss',
-      sports: 'https://vnexpress.net/rss/the-thao.rss',
-      entertainment: 'https://vnexpress.net/rss/giai-tri.rss',
-      products: 'https://vnexpress.net/rss/khoa-hoc-cong-nghe.rss',
-    };
-    return feeds[topicKey] ?? 'https://vnexpress.net/rss/tin-moi-nhat.rss';
+  private async ensureSource(topicKey: string, profile: SourceProfile) {
+    return this.prisma.source.upsert({
+      where: { slug: profile.slug },
+      update: {
+        name: profile.name,
+        status: SourceStatus.ACTIVE,
+        baseUrl: profile.feedUrl,
+        adapterKey: profile.adapterKey,
+        config: {
+          locale: profile.locale,
+          country: profile.country,
+          topicKey,
+          sourceTier: profile.sourceTier,
+          scopedToInterest: profile.scopedToInterest,
+        },
+      },
+      create: {
+        name: profile.name,
+        slug: profile.slug,
+        kind: SourceKind.RSS,
+        adapterKey: profile.adapterKey,
+        baseUrl: profile.feedUrl,
+        status: SourceStatus.ACTIVE,
+        defaultIntervalSec: 900,
+        rateLimitPerMinute: 30,
+        config: {
+          locale: profile.locale,
+          country: profile.country,
+          topicKey,
+          sourceTier: profile.sourceTier,
+          scopedToInterest: profile.scopedToInterest,
+        },
+      },
+    });
   }
 
   private async persistItem(input: {
@@ -195,51 +243,83 @@ export class IngestionService {
     sourceId: string;
     subscriptionId: string;
     item: FeedItem;
+    sourceTier: 1 | 2;
   }) {
-    const externalId = this.hash(input.item.externalId);
+    const externalId = this.hash(input.item.canonicalUrl);
     const contentHash = this.hash(`${input.item.title}\n${input.item.content}`);
     const now = new Date();
-    const existing = await this.prisma.event.findUnique({
-      where: { sourceId_externalId: { sourceId: input.sourceId, externalId } },
-      select: { id: true },
+    let existing = await this.prisma.event.findFirst({
+      where: { OR: [{ sourceId: input.sourceId, externalId }, { url: input.item.canonicalUrl }] },
+      select: { id: true, contentHash: true, url: true, metadata: true },
     });
-    const event =
-      existing ??
-      (await this.prisma.event.create({
-        data: {
-          sourceId: input.sourceId,
-          sourceSubscriptionId: input.subscriptionId,
-          externalId,
-          contentHash,
-          type: 'NEWS_ARTICLE',
-          title: input.item.title,
-          content: input.item.content,
-          summary: input.item.content,
-          url: input.item.canonicalUrl,
-          author: input.item.publisher,
-          language: input.item.language,
-          publishedAt: input.item.publishedAt,
-          status: EventStatus.PROCESSED,
-          processedAt: now,
-          metadata: {
-            publisher: input.item.publisher,
-            canonicalUrl: input.item.canonicalUrl,
-            sourceTier: 2,
-            fetchedAt: now.toISOString(),
-            verifiedAt: input.item.metadata.verifiedAt,
-            originalPublishedAt: input.item.publishedAt.toISOString(),
+    let eventCreated = false;
+    let event;
+    if (existing) {
+      event = await this.updateExistingEvent(existing, input, externalId, contentHash, now);
+    } else {
+      try {
+        event = await this.prisma.event.create({
+          data: {
+            sourceId: input.sourceId,
+            sourceSubscriptionId: input.subscriptionId,
+            externalId,
             contentHash,
-            revisions: [],
-            ...input.item.metadata,
+            type: 'NEWS_ARTICLE',
+            title: input.item.title,
+            content: input.item.content,
+            summary: this.summaryContent(input.item.content),
+            url: input.item.canonicalUrl,
+            author: input.item.publisher,
+            language: input.item.language,
+            publishedAt: input.item.publishedAt,
+            status: EventStatus.PROCESSED,
+            processedAt: now,
+            metadata: {
+              publisher: input.item.publisher,
+              canonicalUrl: input.item.canonicalUrl,
+              sourceTier: input.sourceTier,
+              fetchedAt: now.toISOString(),
+              verifiedAt: input.item.metadata.verifiedAt,
+              originalPublishedAt: input.item.publishedAt.toISOString(),
+              contentHash,
+              revisions: [],
+              ...input.item.metadata,
+            },
           },
-        },
-      }));
+        });
+        eventCreated = true;
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+          throw error;
+        }
+        existing = await this.prisma.event.findFirstOrThrow({
+          where: { url: input.item.canonicalUrl },
+          select: { id: true, contentHash: true, url: true, metadata: true },
+        });
+        event = await this.updateExistingEvent(existing, input, externalId, contentHash, now);
+      }
+    }
     const linked = await this.prisma.insightEvent.findFirst({
       where: { eventId: event.id },
       select: { insightId: true },
     });
     if (linked) {
-      await this.ensureLocalizations(linked.insightId, input.item);
+      await this.prisma.insight.update({
+        where: { id: linked.insightId },
+        data: {
+          title: input.item.title,
+          content: this.summaryContent(input.item.content),
+          language: input.item.language,
+          metadata: {
+            publisher: input.item.publisher,
+            canonicalUrl: input.item.canonicalUrl,
+            sourceContentHash: contentHash,
+            articleUrl: input.item.canonicalUrl,
+            suggestedAction: 'Open source',
+          },
+        },
+      });
+      await this.enqueueRequiredLocalizations(linked.insightId, input.item);
       await this.prisma.userInsight.upsert({
         where: {
           userId_insightId_interestId: {
@@ -254,24 +334,18 @@ export class IngestionService {
           insightId: linked.insightId,
           interestId: input.interestId,
           relevanceScore: 1,
-          matchedReason: { reason: 'rss_term_match', title: input.item.title },
+          matchedReason: { code: 'RSS_TERM_MATCH', matchedTitle: input.item.title },
         },
       });
-      return { eventCreated: !existing, insightCreated: false };
+      return { eventCreated, insightCreated: false };
     }
 
     const importance = this.importance(input.item.publishedAt);
-    const localizations = (
-      await Promise.all([
-        this.localizeInsight(input.item, 'vi'),
-        this.localizeInsight(input.item, 'en'),
-      ])
-    ).filter((localized) => localized.provider !== 'fallback-original');
-    await this.prisma.insight.create({
+    const insight = await this.prisma.insight.create({
       data: {
         type: importance >= 0.75 ? InsightType.ALERT : InsightType.SUMMARY,
         title: input.item.title,
-        content: input.item.content,
+        content: this.summaryContent(input.item.content),
         language: input.item.language,
         importanceScore: importance,
         confidenceScore: 1,
@@ -291,52 +365,134 @@ export class IngestionService {
             userId: input.userId,
             interestId: input.interestId,
             relevanceScore: 1,
-            matchedReason: { reason: 'rss_term_match', title: input.item.title },
+            matchedReason: { code: 'RSS_TERM_MATCH', matchedTitle: input.item.title },
           },
-        },
-        localizations: {
-          create: localizations.map((localized) => ({
-            locale: localized.locale,
-            title: localized.title,
-            content: localized.content,
-            relevanceReason: localized.relevanceReason,
-            suggestedAction: localized.suggestedAction,
-            provider: localized.provider,
-            model: localized.model,
-            promptVersion: localized.promptVersion,
-            sourceContentHash: localized.sourceContentHash,
-            validationStatus: localized.validationStatus,
-            qualityScore: localized.qualityScore,
-            generatedAt: new Date(),
-            metadata: { fallback: false, validator: 'localization-basic-v1' },
-          })),
         },
       },
     });
-    return { eventCreated: !existing, insightCreated: true };
+    await this.enqueueRequiredLocalizations(insight.id, input.item);
+    return { eventCreated, insightCreated: true };
+  }
+
+  private async updateExistingEvent(
+    existing: { id: string; contentHash: string; url: string | null; metadata: Prisma.JsonValue },
+    input: {
+      subscriptionId: string;
+      item: FeedItem;
+      sourceTier: 1 | 2;
+    },
+    externalId: string,
+    contentHash: string,
+    now: Date,
+  ) {
+    const previousMetadata = this.object(existing.metadata);
+    const previousRevisions = Array.isArray(previousMetadata.revisions)
+      ? previousMetadata.revisions
+      : [];
+    const changed =
+      existing.contentHash !== contentHash || existing.url !== input.item.canonicalUrl;
+    return this.prisma.event.update({
+      where: { id: existing.id },
+      data: {
+        sourceSubscriptionId: input.subscriptionId,
+        externalId,
+        contentHash,
+        title: input.item.title,
+        content: input.item.content,
+        summary: this.summaryContent(input.item.content),
+        url: input.item.canonicalUrl,
+        author: input.item.publisher,
+        language: input.item.language,
+        publishedAt: input.item.publishedAt,
+        status: EventStatus.PROCESSED,
+        processedAt: now,
+        metadata: {
+          publisher: input.item.publisher,
+          canonicalUrl: input.item.canonicalUrl,
+          sourceTier: input.sourceTier,
+          fetchedAt: now.toISOString(),
+          verifiedAt: input.item.metadata.verifiedAt,
+          originalPublishedAt: input.item.publishedAt.toISOString(),
+          contentHash,
+          revisions: changed
+            ? [
+                ...previousRevisions,
+                {
+                  url: existing.url,
+                  contentHash: existing.contentHash,
+                  correctedAt: now.toISOString(),
+                  reason: 'SOURCE_CONTENT_REFRESHED',
+                },
+              ]
+            : previousRevisions,
+          ...input.item.metadata,
+        },
+      },
+    });
+  }
+
+  private async rejectExistingEvent(
+    sourceId: string,
+    item: FeedItem,
+    errors: string[],
+  ): Promise<void> {
+    const event = await this.prisma.event.findFirst({
+      where: { sourceId, url: item.canonicalUrl, status: { not: EventStatus.REJECTED } },
+      select: { id: true, metadata: true, url: true, contentHash: true },
+    });
+    if (!event) return;
+    const now = new Date();
+    const metadata = this.object(event.metadata);
+    const revisions = Array.isArray(metadata.revisions) ? metadata.revisions : [];
+    await this.prisma.event.update({
+      where: { id: event.id },
+      data: {
+        status: EventStatus.REJECTED,
+        metadata: {
+          ...metadata,
+          invalidatedAt: now.toISOString(),
+          invalidationReason: errors.join(','),
+          revisions: [
+            ...revisions,
+            {
+              url: event.url,
+              contentHash: event.contentHash,
+              correctedAt: now.toISOString(),
+              reason: 'SOURCE_REVALIDATION_FAILED',
+            },
+          ],
+        },
+      },
+    });
   }
 
   private async localizeInsight(
     item: FeedItem,
     locale: SupportedLocale,
   ): Promise<LocalizedInsight> {
-    const [titleResult, contentResult] = await Promise.all([
-      this.translate(item.title, locale),
-      this.translate(item.content, locale),
-    ]);
+    const sourceSummary = this.summaryContent(item.content);
+    const titleResult = await this.translationProvider.translate(item.title, item.language, locale);
+    const contentResult = await this.translationProvider.translate(
+      sourceSummary,
+      item.language,
+      locale,
+    );
     const title = titleResult.text;
     const content = contentResult.text;
     const provider =
       titleResult.provider === 'fallback-original' || contentResult.provider === 'fallback-original'
         ? 'fallback-original'
-        : titleResult.provider === 'mymemory' || contentResult.provider === 'mymemory'
-          ? 'mymemory'
-          : 'source-original';
+        : titleResult.provider;
     const sourceContentHash = this.hash(`${item.title}\n${item.content}`);
-    const numbersPreserved = this.numbers(item.title + item.content).every((value) =>
-      `${title}${content}`.includes(value),
-    );
-    const passed = provider !== 'fallback-original' && numbersPreserved;
+    const quality = this.localizationValidator.validate({
+      sourceTitle: item.title,
+      sourceContent: sourceSummary,
+      localizedTitle: title,
+      localizedContent: content,
+      sourceLocale: item.language,
+      targetLocale: locale,
+    });
+    const passed = provider !== 'fallback-original' && quality.passed;
     return {
       locale,
       title,
@@ -347,42 +503,121 @@ export class IngestionService {
           : `This is relevant to a topic you are tracking: ${title}`,
       suggestedAction: locale === 'vi' ? 'Mở bài viết gốc' : 'Open source',
       provider: passed ? provider : 'fallback-original',
-      model: provider === 'mymemory' ? 'mymemory-api' : 'source-original',
-      promptVersion: 'localization-basic-v1',
+      model: contentResult.model,
+      promptVersion: LOCALIZATION_PROMPT_VERSION,
       sourceContentHash,
       validationStatus: passed ? 'PASSED' : 'FALLBACK_REJECTED',
-      qualityScore: passed ? 0.9 : 0,
+      qualityScore: passed ? quality.score : 0,
     };
   }
 
-  private async ensureLocalizations(insightId: string, item: FeedItem): Promise<void> {
-    const existing = await this.prisma.insightLocalization.findMany({
-      where: { insightId },
-      select: { locale: true, provider: true },
-    });
-    const sourceLanguage = item.language;
-    const retryLocales = new Set(
-      existing
-        .filter(
-          (value) =>
-            value.provider === 'fallback-original' ||
-            value.provider === 'google-translate' ||
-            (value.provider === 'source-original' && value.locale !== sourceLanguage),
-        )
-        .map((value) => value.locale),
-    );
-    const existingLocales = new Set(existing.map((value) => value.locale));
-    const required = (['vi', 'en'] as const).filter(
-      (locale) => !existingLocales.has(locale) || retryLocales.has(locale),
-    );
-    const localizations = (
-      await Promise.all(required.map((locale) => this.localizeInsight(item, locale)))
-    ).filter((localized) => localized.provider !== 'fallback-original');
-    if (localizations.length === 0) return;
+  private async enqueueRequiredLocalizations(insightId: string, item: FeedItem): Promise<void> {
+    const sourceContentHash = this.hash(`${item.title}\n${item.content}`);
     await Promise.all(
-      localizations.map((localized) =>
-        this.prisma.insightLocalization.upsert({
-          where: { insightId_locale: { insightId, locale: localized.locale } },
+      (['vi', 'en'] as const).map((locale) =>
+        this.ingestionQueue.enqueueLocalization({
+          insightId,
+          locale,
+          sourceContentHash,
+          promptVersion: LOCALIZATION_PROMPT_VERSION,
+        }),
+      ),
+    );
+  }
+
+  async localizeInsightById(input: {
+    insightId: string;
+    locale: SupportedLocale;
+    sourceContentHash: string;
+    promptVersion: string;
+  }): Promise<{ status: 'created' | 'reused'; qualityScore: number }> {
+    const startedAt = Date.now();
+    const identity = {
+      insightId: input.insightId,
+      locale: input.locale,
+      sourceContentHash: input.sourceContentHash,
+      promptVersion: input.promptVersion,
+    };
+    const existingRevision = await this.prisma.insightLocalizationRevision.findUnique({
+      where: { insightId_locale_sourceContentHash_promptVersion: identity },
+    });
+    if (existingRevision?.validationStatus === 'PASSED')
+      return { status: 'reused', qualityScore: Number(existingRevision.qualityScore) };
+
+    const insight = await this.prisma.insight.findUniqueOrThrow({
+      where: { id: input.insightId },
+      include: { insightEvents: { include: { event: true }, take: 1 } },
+    });
+    const event = insight.insightEvents[0]?.event;
+    if (!event || event.status !== EventStatus.PROCESSED || !event.url)
+      throw new Error('LOCALIZATION_SOURCE_NOT_VERIFIED');
+    if (event.contentHash !== input.sourceContentHash) throw new Error('LOCALIZATION_STALE_JOB');
+    const eventMetadata = this.object(event.metadata);
+    if (typeof eventMetadata.verifiedAt !== 'string')
+      throw new Error('LOCALIZATION_SOURCE_NOT_VERIFIED');
+    const item: FeedItem = {
+      externalId: event.externalId,
+      title: event.title,
+      content: event.content,
+      canonicalUrl: event.url,
+      publishedAt: event.publishedAt,
+      publisher: event.author ?? 'Unknown',
+      language: event.language === 'vi' ? 'vi' : 'en',
+      metadata: {
+        verifiedAt: eventMetadata.verifiedAt,
+        discoveryUrl:
+          typeof eventMetadata.discoveryUrl === 'string' ? eventMetadata.discoveryUrl : event.url,
+      },
+    };
+    const localized = await this.localizeInsight(item, input.locale);
+    const quality = this.localizationValidator.validate({
+      sourceTitle: item.title,
+      sourceContent: this.summaryContent(item.content),
+      localizedTitle: localized.title,
+      localizedContent: localized.content,
+      sourceLocale: item.language,
+      targetLocale: input.locale,
+    });
+    const publishable = quality.passed && localized.provider !== 'fallback-original';
+    const failureReasons = publishable
+      ? quality.failureReasons
+      : [...new Set([...quality.failureReasons, 'PROVIDER_UNAVAILABLE'])];
+    const validationStatus = publishable ? 'PASSED' : 'REJECTED';
+
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.insightLocalizationRevision.upsert({
+        where: { insightId_locale_sourceContentHash_promptVersion: identity },
+        update: {
+          title: localized.title,
+          content: localized.content,
+          relevanceReason: localized.relevanceReason,
+          suggestedAction: localized.suggestedAction,
+          provider: localized.provider,
+          model: localized.model,
+          validationStatus,
+          qualityScore: quality.score,
+          failureReasons,
+          evidence: quality.evidence,
+          correctionReason: 'AUTOMATED_RETRY',
+        },
+        create: {
+          ...identity,
+          title: localized.title,
+          content: localized.content,
+          relevanceReason: localized.relevanceReason,
+          suggestedAction: localized.suggestedAction,
+          provider: localized.provider,
+          model: localized.model,
+          validationStatus,
+          qualityScore: quality.score,
+          failureReasons,
+          evidence: quality.evidence,
+          metadata: { validator: 'localization-quality-v2' },
+        },
+      });
+      if (publishable) {
+        await transaction.insightLocalization.upsert({
+          where: { insightId_locale: { insightId: input.insightId, locale: input.locale } },
           update: {
             title: localized.title,
             content: localized.content,
@@ -390,68 +625,108 @@ export class IngestionService {
             suggestedAction: localized.suggestedAction,
             provider: localized.provider,
             model: localized.model,
-            promptVersion: localized.promptVersion,
-            sourceContentHash: localized.sourceContentHash,
-            validationStatus: localized.validationStatus,
-            qualityScore: localized.qualityScore,
+            promptVersion: input.promptVersion,
+            sourceContentHash: input.sourceContentHash,
+            validationStatus,
+            qualityScore: quality.score,
             generatedAt: new Date(),
-            metadata: { fallback: false, validator: 'localization-basic-v1' },
+            metadata: { fallback: false, validator: 'localization-quality-v2' },
           },
           create: {
-            insightId,
-            locale: localized.locale,
+            insightId: input.insightId,
+            locale: input.locale,
             title: localized.title,
             content: localized.content,
             relevanceReason: localized.relevanceReason,
             suggestedAction: localized.suggestedAction,
             provider: localized.provider,
             model: localized.model,
-            promptVersion: localized.promptVersion,
-            sourceContentHash: localized.sourceContentHash,
-            validationStatus: localized.validationStatus,
-            qualityScore: localized.qualityScore,
+            promptVersion: input.promptVersion,
+            sourceContentHash: input.sourceContentHash,
+            validationStatus,
+            qualityScore: quality.score,
             generatedAt: new Date(),
-            metadata: { fallback: false, validator: 'localization-basic-v1' },
+            metadata: { fallback: false, validator: 'localization-quality-v2' },
           },
-        }),
-      ),
-    );
-  }
-
-  private async translate(
-    value: string,
-    target: SupportedLocale,
-  ): Promise<{ text: string; provider: string }> {
-    const source = this.detectLanguage(value);
-    if (source === target) return { text: value, provider: 'source-original' };
-    try {
-      const parameters = new URLSearchParams({ q: value, langpair: `${source}|${target}` });
-      const response = await fetch(
-        `https://api.mymemory.translated.net/get?${parameters.toString()}`,
-        {
-          headers: { 'User-Agent': 'NoraBot/0.1 (+local-development)' },
-          signal: AbortSignal.timeout(8_000),
+        });
+      }
+      await transaction.pipelineRun.create({
+        data: {
+          pipeline: 'localization',
+          status: publishable ? 'SUCCEEDED' : 'REJECTED',
+          insightId: input.insightId,
+          locale: input.locale,
+          processedCount: publishable ? 1 : 0,
+          rejectedCount: publishable ? 0 : 1,
+          errorCode: failureReasons[0] ?? null,
+          durationMs: Date.now() - startedAt,
+          completedAt: new Date(),
+          metadata: { provider: localized.provider, model: localized.model },
         },
-      );
-      if (!response.ok) throw new Error(`translation returned HTTP ${response.status}`);
-      const payload = (await response.json()) as { responseData?: { translatedText?: string } };
-      const translated = payload.responseData?.translatedText?.trim();
-      return translated
-        ? { text: translated, provider: 'mymemory' }
-        : { text: value, provider: 'fallback-original' };
-    } catch (error) {
-      this.logger.warn(
-        `Translation to ${target} failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-      );
-      return { text: value, provider: 'fallback-original' };
-    }
+      });
+    });
+    if (!publishable) throw new Error(`LOCALIZATION_QUALITY_REJECTED:${failureReasons.join(',')}`);
+
+    const users = await this.prisma.userInsight.findMany({
+      where: { insightId: input.insightId },
+      distinct: ['userId'],
+      select: { userId: true },
+    });
+    await Promise.all(users.map((user) => this.rebuildTodayBrief(user.userId)));
+    return { status: 'created', qualityScore: quality.score };
   }
 
-  private detectLanguage(value: string): SupportedLocale {
-    const vietnameseCharacters =
-      value.match(/[ăâđêôơưàáạảãầấậẩẫằắặẳẵèéẹẻẽềếệểễìíịỉĩòóọỏõồốộổỗờớợởỡùúụủũừứựửữỳýỵỷỹ]/gi)
-        ?.length ?? 0;
-    return vietnameseCharacters >= 3 ? 'vi' : 'en';
+  async enqueuePendingLocalizations(): Promise<{ insights: number; jobs: number }> {
+    const insights = await this.prisma.insight.findMany({
+      where: {
+        userInsights: { some: {} },
+        insightEvents: { some: { event: { status: EventStatus.PROCESSED } } },
+        OR: [
+          { localizations: { none: { locale: 'vi' } } },
+          { localizations: { none: { locale: 'en' } } },
+        ],
+      },
+      take: 200,
+      include: {
+        localizations: { select: { locale: true, sourceContentHash: true, promptVersion: true } },
+        insightEvents: { include: { event: true }, take: 1 },
+      },
+    });
+    let jobs = 0;
+    for (const insight of insights) {
+      const event = insight.insightEvents[0]?.event;
+      if (!event) continue;
+      for (const locale of ['vi', 'en'] as const) {
+        const current = insight.localizations.find(
+          (localization) =>
+            localization.locale === locale &&
+            localization.sourceContentHash === event.contentHash &&
+            localization.promptVersion === LOCALIZATION_PROMPT_VERSION,
+        );
+        if (current) continue;
+        await this.ingestionQueue.enqueueLocalization({
+          insightId: insight.id,
+          locale,
+          sourceContentHash: event.contentHash,
+          promptVersion: LOCALIZATION_PROMPT_VERSION,
+        });
+        jobs += 1;
+      }
+    }
+    return { insights: insights.length, jobs };
+  }
+
+  async recordJobFailure(jobType: string, error: Error, metadata: Prisma.InputJsonObject) {
+    await this.prisma.pipelineRun.create({
+      data: {
+        pipeline: jobType,
+        status: 'FAILED',
+        errorCode: error.message.split(':', 1)[0]?.slice(0, 80) || 'UNKNOWN',
+        rejectedCount: 1,
+        completedAt: new Date(),
+        metadata,
+      },
+    });
   }
 
   private async rebuildTodayBrief(userId: string): Promise<string | null> {
@@ -494,36 +769,27 @@ export class IngestionService {
       bucket.push(candidate);
       buckets.set(candidate.interestId, bucket);
     }
+    const primaryFreshnessCutoff = Date.now() - 48 * 3_600_000;
+    for (const [interestId, bucket] of buckets) {
+      const fresh = bucket.filter(
+        (candidate) =>
+          (candidate.insight.insightEvents[0]?.event.publishedAt.getTime() ?? 0) >=
+          primaryFreshnessCutoff,
+      );
+      if (fresh.length > 0) buckets.set(interestId, fresh);
+    }
     const rows: typeof relevantCandidates = [];
-    while (rows.length < 8 && [...buckets.values()].some((bucket) => bucket.length > 0)) {
+    while (
+      rows.length < DAILY_BRIEF_ITEM_LIMIT &&
+      [...buckets.values()].some((bucket) => bucket.length > 0)
+    ) {
       for (const bucket of buckets.values()) {
         const next = bucket.shift();
         if (next) rows.push(next);
-        if (rows.length === 8) break;
+        if (rows.length === DAILY_BRIEF_ITEM_LIMIT) break;
       }
     }
     if (rows.length === 0) return null;
-    await Promise.all(
-      rows.map(async (row) => {
-        const event = row.insight.insightEvents[0]?.event;
-        if (!event) return;
-        const metadata = this.object(event.metadata);
-        await this.ensureLocalizations(row.insightId, {
-          externalId: event.externalId,
-          title: event.title,
-          content: event.content,
-          canonicalUrl: event.url ?? '',
-          publishedAt: event.publishedAt,
-          publisher: event.author ?? 'VnExpress',
-          language: event.language === 'en' ? 'en' : 'vi',
-          metadata: {
-            verifiedAt: typeof metadata.verifiedAt === 'string' ? metadata.verifiedAt : '',
-            discoveryUrl:
-              typeof metadata.discoveryUrl === 'string' ? metadata.discoveryUrl : (event.url ?? ''),
-          },
-        });
-      }),
-    );
     const brief = await this.prisma.$transaction(async (transaction) => {
       const current = await transaction.dailyBrief.upsert({
         where: { userId_briefDate: { userId, briefDate } },
@@ -631,6 +897,17 @@ export class IngestionService {
 
   private numbers(value: string): string[] {
     return value.match(/\d+(?:[.,]\d+)*(?:%|\s?(?:USD|VND|BTC))?/giu) ?? [];
+  }
+
+  private summaryContent(value: string): string {
+    if (value.length <= 500) return value;
+    const candidate = value.slice(0, 500);
+    const sentenceEnd = Math.max(
+      candidate.lastIndexOf('. '),
+      candidate.lastIndexOf('! '),
+      candidate.lastIndexOf('? '),
+    );
+    return (sentenceEnd >= 160 ? candidate.slice(0, sentenceEnd + 1) : candidate).trim();
   }
 
   private object(value: unknown): Record<string, unknown> {
