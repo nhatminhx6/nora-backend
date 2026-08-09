@@ -23,6 +23,7 @@ export interface ResetAccountDataResult {
     notifications: number;
     dailyBriefs: number;
     watchRules: number;
+    workItems: number;
     sourceSubscriptions: number;
   };
 }

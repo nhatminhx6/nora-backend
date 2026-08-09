@@ -87,6 +87,7 @@ export class UsersRepository {
       const notifications = await transaction.notification.deleteMany({ where: { userId } });
       const dailyBriefs = await transaction.dailyBrief.deleteMany({ where: { userId } });
       const watchRules = await transaction.watchRule.deleteMany({ where: { userId } });
+      const workItems = await transaction.workItem.deleteMany({ where: { userId } });
       const userInsights = await transaction.userInsight.deleteMany({ where: { userId } });
       const deletedInterests = await transaction.interest.deleteMany({ where: { userId } });
 
@@ -109,6 +110,7 @@ export class UsersRepository {
           notifications: notifications.count,
           dailyBriefs: dailyBriefs.count,
           watchRules: watchRules.count,
+          workItems: workItems.count,
           sourceSubscriptions,
         },
       };

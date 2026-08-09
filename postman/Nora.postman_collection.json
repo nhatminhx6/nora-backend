@@ -253,6 +253,67 @@
       ]
     },
     {
+      "name": "Work Items",
+      "item": [
+        {
+          "name": "Create Work Item",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Chuẩn bị API contract\",\n  \"notes\": \"Chốt pagination cho Home feed\",\n  \"priority\": \"HIGH\",\n  \"dueAt\": \"2026-08-09T09:00:00.000Z\"\n}"
+            },
+            "url": "{{host}}/work-items"
+          }
+        },
+        {
+          "name": "List Work Items",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/work-items?page=1"
+          }
+        },
+        {
+          "name": "Get Work Brief",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/work-items/brief"
+          }
+        },
+        {
+          "name": "Update Work Item",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "PATCH",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
+              { "key": "Content-Type", "value": "application/json", "type": "text" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"DONE\"\n}" },
+            "url": "{{host}}/work-items/REPLACE_WORK_ITEM_ID"
+          }
+        },
+        {
+          "name": "Delete Work Item",
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "url": "{{host}}/work-items/REPLACE_WORK_ITEM_ID"
+          }
+        }
+      ]
+    },
+    {
       "name": "Content",
       "item": [
         {

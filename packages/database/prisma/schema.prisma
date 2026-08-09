@@ -113,6 +113,26 @@ enum WatchRuleStatus {
   DISABLED
 }
 
+enum WorkItemStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+enum WorkItemPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum WorkItemSource {
+  MANUAL
+  EXTRACTED
+  CONNECTOR
+}
+
 model User {
   id                String         @id @default(uuid()) @db.Uuid
   email             String         @unique @db.VarChar(320)
@@ -134,10 +154,33 @@ model User {
   notifications     Notification[]
   dailyBriefs       DailyBrief[]
   watchRules        WatchRule[]
+  workItems         WorkItem[]
 
   @@index([status, createdAt])
   @@index([deletedAt])
   @@map("users")
+}
+
+model WorkItem {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  title       String           @db.VarChar(255)
+  notes       String?          @db.Text
+  status      WorkItemStatus   @default(TODO)
+  priority    WorkItemPriority @default(MEDIUM)
+  dueAt       DateTime?        @map("due_at") @db.Timestamptz(3)
+  completedAt DateTime?        @map("completed_at") @db.Timestamptz(3)
+  source      WorkItemSource   @default(MANUAL)
+  sourceRef   String?          @map("source_ref") @db.VarChar(255)
+  metadata    Json             @default("{}") @db.JsonB
+  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, source, sourceRef])
+  @@index([userId, status, dueAt])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("work_items")
 }
 
 model Device {
@@ -344,24 +387,24 @@ model EventEntity {
 }
 
 model Insight {
-  id              String                @id @default(uuid()) @db.Uuid
-  type            InsightType
-  title           String                @db.Text
-  content         String                @db.Text
-  language        String?               @db.VarChar(16)
-  importanceScore Decimal               @map("importance_score") @db.Decimal(5, 4)
-  confidenceScore Decimal?              @map("confidence_score") @db.Decimal(5, 4)
-  modelProvider   String?               @map("model_provider") @db.VarChar(64)
-  modelName       String?               @map("model_name") @db.VarChar(120)
-  promptVersion   String?               @map("prompt_version") @db.VarChar(32)
-  metadata        Json                  @default("{}") @db.JsonB
-  generatedAt     DateTime              @default(now()) @map("generated_at") @db.Timestamptz(3)
-  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
-  insightEvents   InsightEvent[]
-  insightEntities InsightEntity[]
-  userInsights    UserInsight[]
-  localizations   InsightLocalization[]
+  id                    String                        @id @default(uuid()) @db.Uuid
+  type                  InsightType
+  title                 String                        @db.Text
+  content               String                        @db.Text
+  language              String?                       @db.VarChar(16)
+  importanceScore       Decimal                       @map("importance_score") @db.Decimal(5, 4)
+  confidenceScore       Decimal?                      @map("confidence_score") @db.Decimal(5, 4)
+  modelProvider         String?                       @map("model_provider") @db.VarChar(64)
+  modelName             String?                       @map("model_name") @db.VarChar(120)
+  promptVersion         String?                       @map("prompt_version") @db.VarChar(32)
+  metadata              Json                          @default("{}") @db.JsonB
+  generatedAt           DateTime                      @default(now()) @map("generated_at") @db.Timestamptz(3)
+  createdAt             DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  insightEvents         InsightEvent[]
+  insightEntities       InsightEntity[]
+  userInsights          UserInsight[]
+  localizations         InsightLocalization[]
   localizationRevisions InsightLocalizationRevision[]
 
   @@index([type, generatedAt(sort: Desc)])

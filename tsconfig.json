@@ -29,7 +29,9 @@
       "@nora/content": ["packages/modules/content/src"],
       "@nora/content/*": ["packages/modules/content/src/*"],
       "@nora/ingestion": ["packages/modules/ingestion/src"],
-      "@nora/ingestion/*": ["packages/modules/ingestion/src/*"]
+      "@nora/ingestion/*": ["packages/modules/ingestion/src/*"],
+      "@nora/work-items": ["packages/modules/work-items/src"],
+      "@nora/work-items/*": ["packages/modules/work-items/src/*"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts"],
