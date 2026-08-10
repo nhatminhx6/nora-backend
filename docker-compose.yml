@@ -36,7 +36,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-nora}:${POSTGRES_PASSWORD:-change-me}@postgres:5432/${POSTGRES_DB:-nora}?schema=public
       REDIS_HOST: redis
     ports:
-      - '${API_PORT:-3000}:3000'
+      - '${API_PORT:-3008}:${API_PORT:-3008}'
     depends_on:
       postgres:
         condition: service_healthy

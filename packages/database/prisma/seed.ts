@@ -9,16 +9,54 @@ import {
   PrismaClient,
   SourceKind,
   UserInsightStatus,
+  WorkItemPriority,
+  WorkItemSource,
+  WorkItemStatus,
 } from '@prisma/client';
 import { hash } from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 const DEMO_USER = {
-  email: 'admin@nora.local',
-  password: 'NoraLocal123!',
-  displayName: 'Nora Admin',
+  email: 'minhmera@gmail.com',
+  password: '12345678',
+  displayName: 'Minh Mera',
 };
+
+const workItems = [
+  {
+    ref: 'seed-review-openai-update',
+    title: 'Đọc cập nhật OpenAI và ghi chú ảnh hưởng tới Nora',
+    notes: 'Tóm tắt các thay đổi có thể áp dụng cho ingestion và trải nghiệm assistant.',
+    status: WorkItemStatus.TODO,
+    priority: WorkItemPriority.HIGH,
+    dueInDays: 1,
+  },
+  {
+    ref: 'seed-check-bitcoin-alert',
+    title: 'Kiểm tra điều kiện cảnh báo Bitcoin',
+    notes: 'Rà lại ngưỡng biến động và nội dung notification trước khi bật alert.',
+    status: WorkItemStatus.IN_PROGRESS,
+    priority: WorkItemPriority.URGENT,
+    dueInDays: 0,
+  },
+  {
+    ref: 'seed-plan-mobile-release',
+    title: 'Chuẩn bị checklist release ứng dụng mobile',
+    notes: 'Bao gồm API contract, migration, smoke test và release notes.',
+    status: WorkItemStatus.TODO,
+    priority: WorkItemPriority.MEDIUM,
+    dueInDays: 3,
+  },
+  {
+    ref: 'seed-review-daily-brief',
+    title: 'Review nội dung Daily Brief hôm nay',
+    notes: 'Kiểm tra source, localization và thứ tự ưu tiên của insight.',
+    status: WorkItemStatus.DONE,
+    priority: WorkItemPriority.MEDIUM,
+    dueInDays: -1,
+  },
+] as const;
 
 const topics = [
   {
@@ -80,6 +118,33 @@ const topics = [
   },
 ] as const;
 
+const extraFeedTitles = [
+  'OpenAI cập nhật bộ công cụ phát triển agent',
+  'Codex bổ sung cải tiến cho quy trình review code',
+  'Apple công bố thay đổi mới cho hệ sinh thái ứng dụng',
+  'Thị trường AI tiếp tục thu hút dòng vốn đầu tư',
+  'Bitcoin biến động sau phiên giao dịch tại Mỹ',
+  'Các mô hình ngôn ngữ nhỏ ngày càng hiệu quả hơn',
+  'Xu hướng tích hợp AI vào ứng dụng mobile tăng nhanh',
+  'Doanh nghiệp đẩy mạnh tự động hóa quy trình nội bộ',
+  'Công cụ lập trình bằng AI cải thiện khả năng kiểm thử',
+  'Bảo mật dữ liệu trở thành ưu tiên của sản phẩm AI',
+  'Nền tảng cloud tối ưu hạ tầng cho workload AI',
+  'Các framework frontend tập trung nhiều hơn vào hiệu năng',
+  'SwiftUI tiếp tục hoàn thiện trải nghiệm đa nền tảng',
+  'React cải thiện công cụ hỗ trợ phát triển ứng dụng',
+  'Thị trường crypto ghi nhận thanh khoản tăng trở lại',
+  'Nhà phát triển quan tâm hơn đến AI chạy trên thiết bị',
+  'Thiết kế sản phẩm chuyển hướng sang trải nghiệm chủ động',
+  'Agent AI bắt đầu đảm nhận các workflow nhiều bước',
+  'Các đội ngũ ưu tiên observability cho hệ thống phân tán',
+  'API-first tiếp tục là lựa chọn phổ biến cho sản phẩm mới',
+  'Ứng dụng cá nhân hóa tận dụng ngữ cảnh người dùng tốt hơn',
+  'Công nghệ tìm kiếm kết hợp semantic và dữ liệu thời gian thực',
+  'Các sản phẩm fintech tăng cường lớp kiểm soát rủi ro',
+  'Trợ lý số mở rộng khả năng quản lý công việc hằng ngày',
+] as const;
+
 function localDate(timeZone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone,
@@ -100,7 +165,14 @@ async function main(): Promise<void> {
     ? await prisma.user.findUniqueOrThrow({ where: { email: targetEmail } })
     : await prisma.user.upsert({
         where: { email: DEMO_USER.email },
-        update: { displayName: DEMO_USER.displayName, timezone: timeZone, locale: 'vi' },
+        update: {
+          passwordHash: await hash(DEMO_USER.password, 12),
+          displayName: DEMO_USER.displayName,
+          timezone: timeZone,
+          locale: 'vi',
+          status: 'ACTIVE',
+          deletedAt: null,
+        },
         create: {
           email: DEMO_USER.email,
           passwordHash: await hash(DEMO_USER.password, 12),
@@ -183,7 +255,11 @@ async function main(): Promise<void> {
       where: {
         userId_normalizedName: { userId: user.id, normalizedName: topic.name.toLowerCase() },
       },
-      update: { status: 'ACTIVE', topicKey: topic.key },
+      update: {
+        status: 'ACTIVE',
+        topicKey: topic.key,
+        config: { notificationEnabled: true, category: 'other' },
+      },
       create: {
         userId: user.id,
         topicKey: topic.key,
@@ -191,7 +267,7 @@ async function main(): Promise<void> {
         normalizedName: topic.name.toLowerCase(),
         type: topic.type,
         description: `Theo dõi tin tức và cập nhật về ${topic.name}`,
-        config: { notificationEnabled: true },
+        config: { notificationEnabled: true, category: 'other' },
       },
     });
 
@@ -309,10 +385,9 @@ async function main(): Promise<void> {
       },
     });
 
-    await prisma.insightEvent.upsert({
-      where: { insightId_eventId: { insightId: insight.id, eventId: event.id } },
-      update: {},
-      create: { insightId: insight.id, eventId: event.id },
+    await prisma.insightEvent.createMany({
+      data: [{ insightId: insight.id, eventId: event.id }],
+      skipDuplicates: true,
     });
     await prisma.insightEvent.deleteMany({
       where: { insightId: insight.id, eventId: { not: event.id } },
@@ -392,6 +467,144 @@ async function main(): Promise<void> {
     });
   }
 
+  const extraSource = await prisma.source.upsert({
+    where: { slug: 'nora-seed-feed' },
+    update: { name: 'Nora Curated Feed', lastSyncedAt: now },
+    create: {
+      name: 'Nora Curated Feed',
+      slug: 'nora-seed-feed',
+      kind: SourceKind.WEB_SCRAPING,
+      adapterKey: 'development-feed-seed',
+      baseUrl: 'https://openai.com/news/',
+      defaultIntervalSec: 900,
+      lastSyncedAt: now,
+      config: { developmentSeed: true },
+    },
+  });
+  const seededInterests = await prisma.interest.findMany({
+    where: { userId: user.id, topicKey: { in: topics.map((topic) => topic.key) } },
+  });
+
+  for (const [index, title] of extraFeedTitles.entries()) {
+    const sequence = index + 1;
+    const interest = seededInterests[index % seededInterests.length]!;
+    const isImportant = index < 12;
+    const importance = isImportant ? 0.82 + (index % 3) * 0.03 : 0.48 + (index % 4) * 0.03;
+    const content = isImportant
+      ? `${title}. Đây là cập nhật có mức ưu tiên cao và nên được xem sớm để đánh giá ảnh hưởng tới các chủ đề anh đang theo dõi.`
+      : `${title}. Nora lưu lại cập nhật này để anh có thể đọc thêm khi thuận tiện.`;
+    const url = `https://openai.com/news/?nora-seed=${sequence}`;
+    const publishedAt = new Date(now.getTime() - sequence * 30 * 60_000);
+    const event = await prisma.event.upsert({
+      where: { url },
+      update: {
+        title,
+        content,
+        summary: content,
+        publishedAt,
+        status: EventStatus.PROCESSED,
+      },
+      create: {
+        sourceId: extraSource.id,
+        externalId: createHash('sha256').update(url).digest('hex'),
+        contentHash: createHash('sha256').update(content).digest('hex'),
+        type: 'NEWS',
+        title,
+        content,
+        summary: content,
+        url,
+        author: 'Nora Curated Feed',
+        language: 'vi',
+        publishedAt,
+        occurredAt: publishedAt,
+        status: EventStatus.PROCESSED,
+        processedAt: now,
+        metadata: {
+          sourceName: 'Nora Curated Feed',
+          developmentSeed: true,
+          sequence,
+        },
+      },
+    });
+    const insightId = `10000000-0000-4000-8000-${String(sequence).padStart(12, '0')}`;
+    const insight = await prisma.insight.upsert({
+      where: { id: insightId },
+      update: {
+        type: isImportant ? InsightType.ALERT : InsightType.SUMMARY,
+        title,
+        content,
+        importanceScore: importance,
+        generatedAt: publishedAt,
+      },
+      create: {
+        id: insightId,
+        type: isImportant ? InsightType.ALERT : InsightType.SUMMARY,
+        title,
+        content,
+        language: 'vi',
+        importanceScore: importance,
+        confidenceScore: 0.92,
+        modelProvider: 'development-seed',
+        modelName: 'feed-seed-v1',
+        promptVersion: 'seed-v1',
+        generatedAt: publishedAt,
+        metadata: {
+          suggestedAction: isImportant ? 'Xem cập nhật' : 'Đọc thêm',
+          developmentSeed: true,
+        },
+      },
+    });
+    await prisma.insightEvent.createMany({
+      data: [{ insightId: insight.id, eventId: event.id }],
+      skipDuplicates: true,
+    });
+    await prisma.insightLocalization.upsert({
+      where: { insightId_locale: { insightId: insight.id, locale: 'vi' } },
+      update: {
+        title,
+        content,
+        relevanceReason: `Cập nhật này liên quan đến chủ đề ${interest.name}.`,
+        suggestedAction: isImportant ? 'Xem cập nhật' : 'Đọc thêm',
+      },
+      create: {
+        insightId: insight.id,
+        locale: 'vi',
+        title,
+        content,
+        relevanceReason: `Cập nhật này liên quan đến chủ đề ${interest.name}.`,
+        suggestedAction: isImportant ? 'Xem cập nhật' : 'Đọc thêm',
+        provider: 'development-seed',
+        validationStatus: 'PASSED',
+        qualityScore: 0.95,
+        generatedAt: publishedAt,
+        metadata: { developmentSeed: true },
+      },
+    });
+    await prisma.userInsight.upsert({
+      where: {
+        userId_insightId_interestId: {
+          userId: user.id,
+          insightId: insight.id,
+          interestId: interest.id,
+        },
+      },
+      update: {
+        status: UserInsightStatus.UNREAD,
+        relevanceScore: importance,
+        createdAt: publishedAt,
+      },
+      create: {
+        userId: user.id,
+        insightId: insight.id,
+        interestId: interest.id,
+        status: UserInsightStatus.UNREAD,
+        relevanceScore: importance,
+        matchedReason: { reason: `Liên quan đến chủ đề ${interest.name}.` },
+        createdAt: publishedAt,
+      },
+    });
+  }
+
   const brief = await prisma.dailyBrief.upsert({
     where: { userId_briefDate: { userId: user.id, briefDate } },
     update: {
@@ -434,8 +647,42 @@ async function main(): Promise<void> {
     });
   }
 
+  for (const item of workItems) {
+    const dueAt = new Date(now);
+    dueAt.setDate(dueAt.getDate() + item.dueInDays);
+    await prisma.workItem.upsert({
+      where: {
+        userId_source_sourceRef: {
+          userId: user.id,
+          source: WorkItemSource.EXTRACTED,
+          sourceRef: item.ref,
+        },
+      },
+      update: {
+        title: item.title,
+        notes: item.notes,
+        status: item.status,
+        priority: item.priority,
+        dueAt,
+        completedAt: item.status === WorkItemStatus.DONE ? now : null,
+      },
+      create: {
+        userId: user.id,
+        title: item.title,
+        notes: item.notes,
+        status: item.status,
+        priority: item.priority,
+        dueAt,
+        completedAt: item.status === WorkItemStatus.DONE ? now : null,
+        source: WorkItemSource.EXTRACTED,
+        sourceRef: item.ref,
+        metadata: { seeded: true },
+      },
+    });
+  }
+
   console.log(
-    `Curated Nora data for ${user.email} on ${dateKey}: ${topics.length} verified interests and insights.`,
+    `Curated Nora data for ${user.email} on ${dateKey}: ${topics.length + extraFeedTitles.length} feed insights, ${workItems.length} work items.`,
   );
 }
 
