@@ -32,6 +32,8 @@
       "@nora/ingestion/*": ["packages/modules/ingestion/src/*"],
       "@nora/work-items": ["packages/modules/work-items/src"],
       "@nora/work-items/*": ["packages/modules/work-items/src/*"]
+      ,"@nora/finance": ["packages/modules/finance/src"]
+      ,"@nora/finance/*": ["packages/modules/finance/src/*"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts"],

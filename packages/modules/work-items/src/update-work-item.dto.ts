@@ -1,10 +1,15 @@
-import { WorkItemPriority, WorkItemStatus } from '@prisma/client';
+import { WorkItemPriority, WorkItemRecurrenceType, WorkItemStatus } from '@prisma/client';
 import {
+  ArrayUnique,
+  IsArray,
   IsEnum,
+  IsInt,
   IsISO8601,
   IsOptional,
   IsString,
   MaxLength,
+  Max,
+  Min,
   MinLength,
   ValidateIf,
 } from 'class-validator';
@@ -32,4 +37,39 @@ export class UpdateWorkItemDto {
   @ValidateIf((_, value: unknown) => value !== undefined && value !== null)
   @IsISO8601()
   dueAt?: string | null;
+
+  @IsOptional()
+  @IsEnum(WorkItemRecurrenceType)
+  recurrenceType?: WorkItemRecurrenceType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  recurrenceInterval?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(7, { each: true })
+  recurrenceWeekdays?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(30, { each: true })
+  recurrenceLunarDays?: number[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  recurrenceTimezone?: string;
+
+  @ValidateIf((_, value: unknown) => value !== undefined && value !== null)
+  @IsISO8601()
+  recurrenceUntil?: string | null;
 }

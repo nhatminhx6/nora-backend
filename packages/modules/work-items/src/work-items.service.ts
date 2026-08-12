@@ -1,22 +1,43 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { WorkItemStatus } from '@prisma/client';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { WorkItemRecurrenceType, WorkItemStatus } from '@prisma/client';
+import { randomUUID } from 'node:crypto';
 import { CreateWorkItemDto } from './create-work-item.dto';
 import { UpdateWorkItemDto } from './update-work-item.dto';
 import { WorkItemsRepository } from './work-items.repository';
+import { nextOccurrence, RecurrenceRule, validateRecurrence } from './work-item-recurrence';
 
 @Injectable()
 export class WorkItemsService {
   constructor(private readonly repository: WorkItemsRepository) {}
 
   create(userId: string, dto: CreateWorkItemDto) {
+    const recurrenceType = dto.recurrenceType ?? WorkItemRecurrenceType.NONE;
+    const recurrenceUntil = dto.recurrenceUntil ? new Date(dto.recurrenceUntil) : null;
+    const rule: RecurrenceRule = {
+      recurrenceType,
+      recurrenceInterval: dto.recurrenceInterval ?? 1,
+      recurrenceWeekdays: dto.recurrenceWeekdays ?? [],
+      recurrenceLunarDays: dto.recurrenceLunarDays ?? [],
+      recurrenceTimezone: dto.recurrenceTimezone ?? 'Asia/Ho_Chi_Minh',
+      recurrenceUntil,
+    };
+    validateRecurrence(rule);
+    const preferredDueAt = dto.dueAt
+      ? new Date(dto.dueAt)
+      : recurrenceType === WorkItemRecurrenceType.NONE ? null : new Date();
+    const dueAt = this.resolveFirstDueAt(rule, preferredDueAt);
+    this.validateRange(rule, dueAt);
+
     return this.repository.create({
       userId,
       title: dto.title.trim(),
       notes: dto.notes?.trim(),
       priority: dto.priority,
-      dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+      dueAt,
       source: dto.source,
       sourceRef: dto.sourceRef,
+      ...rule,
+      recurrenceSeriesId: recurrenceType === WorkItemRecurrenceType.NONE ? null : randomUUID(),
     });
   }
 
@@ -43,19 +64,76 @@ export class WorkItemsService {
   }
 
   async update(userId: string, id: string, dto: UpdateWorkItemDto) {
-    await this.requireOwned(userId, id);
+    const item = await this.requireOwned(userId, id);
+    const recurrenceType = dto.recurrenceType ?? item.recurrenceType;
+    const recurrenceUntil = dto.recurrenceUntil === undefined
+      ? item.recurrenceUntil
+      : dto.recurrenceUntil ? new Date(dto.recurrenceUntil) : null;
+    const rule: RecurrenceRule = {
+      recurrenceType,
+      recurrenceInterval: dto.recurrenceInterval ?? item.recurrenceInterval,
+      recurrenceWeekdays: dto.recurrenceWeekdays ?? item.recurrenceWeekdays,
+      recurrenceLunarDays: dto.recurrenceLunarDays ?? item.recurrenceLunarDays,
+      recurrenceTimezone: dto.recurrenceTimezone ?? item.recurrenceTimezone,
+      recurrenceUntil,
+    };
+    validateRecurrence(rule);
+    const dueAt = dto.dueAt === undefined ? item.dueAt : dto.dueAt ? new Date(dto.dueAt) : null;
+    this.validateRange(rule, dueAt);
+
+    const nextDueAt = dto.status === WorkItemStatus.DONE &&
+      item.status !== WorkItemStatus.DONE &&
+      item.dueAt
+      ? nextOccurrence(rule, item.dueAt, item.dueAt)
+      : null;
     return this.repository.update(id, {
       ...(dto.title === undefined ? {} : { title: dto.title.trim() }),
       ...(dto.notes === undefined ? {} : { notes: dto.notes.trim() }),
       ...(dto.priority === undefined ? {} : { priority: dto.priority }),
-      ...(dto.dueAt === undefined ? {} : { dueAt: dto.dueAt ? new Date(dto.dueAt) : null }),
+      ...(nextDueAt ? { dueAt: nextDueAt } : dto.dueAt === undefined ? {} : { dueAt }),
+      ...(dto.recurrenceType === undefined ? {} : { recurrenceType }),
+      ...(dto.recurrenceInterval === undefined ? {} : { recurrenceInterval: rule.recurrenceInterval }),
+      ...(dto.recurrenceWeekdays === undefined ? {} : { recurrenceWeekdays: rule.recurrenceWeekdays }),
+      ...(dto.recurrenceLunarDays === undefined ? {} : { recurrenceLunarDays: rule.recurrenceLunarDays }),
+      ...(dto.recurrenceTimezone === undefined ? {} : { recurrenceTimezone: rule.recurrenceTimezone }),
+      ...(dto.recurrenceUntil === undefined ? {} : { recurrenceUntil }),
+      ...(dto.recurrenceType === undefined ? {} : {
+        recurrenceSeriesId: recurrenceType === WorkItemRecurrenceType.NONE
+          ? null
+          : item.recurrenceSeriesId ?? randomUUID(),
+      }),
+      ...(nextDueAt ? { recurrenceSequence: item.recurrenceSequence + 1 } : {}),
       ...(dto.status === undefined
         ? {}
         : {
-            status: dto.status,
-            completedAt: dto.status === WorkItemStatus.DONE ? new Date() : null,
+            status: nextDueAt ? WorkItemStatus.TODO : dto.status,
+            completedAt: dto.status === WorkItemStatus.DONE && !nextDueAt ? new Date() : null,
           }),
     });
+  }
+
+  private resolveFirstDueAt(rule: RecurrenceRule, preferred: Date | null): Date | null {
+    if (rule.recurrenceType === WorkItemRecurrenceType.NONE) return preferred;
+    if (!preferred) return null;
+    if (rule.recurrenceType === WorkItemRecurrenceType.DAILY) return preferred;
+    const justBeforeNow = new Date(Date.now() - 1);
+    return nextOccurrence(rule, justBeforeNow, preferred);
+  }
+
+  private validateRange(rule: RecurrenceRule, firstDueAt: Date | null): void {
+    if (rule.recurrenceType === WorkItemRecurrenceType.NONE) return;
+    if (!firstDueAt || !rule.recurrenceUntil || rule.recurrenceUntil < firstDueAt) {
+      throw new BadRequestException({
+        code: 'INVALID_RECURRENCE_RANGE', message: 'Recurrence end must be after its first occurrence',
+      });
+    }
+    const maximum = new Date(firstDueAt);
+    maximum.setUTCFullYear(maximum.getUTCFullYear() + 1);
+    if (rule.recurrenceUntil > maximum) {
+      throw new BadRequestException({
+        code: 'RECURRENCE_RANGE_TOO_LONG', message: 'Recurrence range cannot exceed one year',
+      });
+    }
   }
 
   async delete(userId: string, id: string) {

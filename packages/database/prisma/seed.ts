@@ -3,6 +3,7 @@ import {
   DailyBriefStatus,
   EntityType,
   EventStatus,
+  FinanceTransactionType,
   InsightType,
   NotificationChannel,
   NotificationStatus,
@@ -56,6 +57,34 @@ const workItems = [
     priority: WorkItemPriority.MEDIUM,
     dueInDays: -1,
   },
+] as const;
+
+const financeCategories = [
+  ['food', 'Ăn uống', 'fork.knife', FinanceTransactionType.EXPENSE],
+  ['transport', 'Di chuyển', 'car.fill', FinanceTransactionType.EXPENSE],
+  ['shopping', 'Mua sắm', 'bag.fill', FinanceTransactionType.EXPENSE],
+  ['home', 'Nhà cửa', 'house.fill', FinanceTransactionType.EXPENSE],
+  ['health', 'Sức khỏe', 'cross.case.fill', FinanceTransactionType.EXPENSE],
+  ['entertainment', 'Giải trí', 'gamecontroller.fill', FinanceTransactionType.EXPENSE],
+  ['education', 'Giáo dục', 'book.fill', FinanceTransactionType.EXPENSE],
+  ['salary', 'Lương', 'banknote.fill', FinanceTransactionType.INCOME],
+  ['bonus', 'Thưởng', 'gift.fill', FinanceTransactionType.INCOME],
+  ['investment', 'Đầu tư', 'chart.line.uptrend.xyaxis', FinanceTransactionType.INCOME],
+  ['other-expense', 'Khác', 'ellipsis.circle.fill', FinanceTransactionType.EXPENSE],
+  ['other-income', 'Thu nhập khác', 'plus.circle.fill', FinanceTransactionType.INCOME],
+] as const;
+
+const financeSeedItems = [
+  ['salary', FinanceTransactionType.INCOME, 35000000, 'Lương tháng'],
+  ['bonus', FinanceTransactionType.INCOME, 4500000, 'Thưởng dự án'],
+  ['food', FinanceTransactionType.EXPENSE, 85000, 'Ăn trưa'],
+  ['food', FinanceTransactionType.EXPENSE, 42000, 'Cà phê'],
+  ['transport', FinanceTransactionType.EXPENSE, 120000, 'Đổ xăng'],
+  ['shopping', FinanceTransactionType.EXPENSE, 1290000, 'Mua đồ gia dụng'],
+  ['home', FinanceTransactionType.EXPENSE, 3200000, 'Tiền điện nước'],
+  ['health', FinanceTransactionType.EXPENSE, 650000, 'Khám sức khỏe'],
+  ['entertainment', FinanceTransactionType.EXPENSE, 179000, 'Đăng ký xem phim'],
+  ['education', FinanceTransactionType.EXPENSE, 499000, 'Mua sách'],
 ] as const;
 
 const topics = [
@@ -681,8 +710,38 @@ async function main(): Promise<void> {
     });
   }
 
+  const categoryIds = new Map<string, string>();
+  for (const [index, category] of financeCategories.entries()) {
+    const [slug, name, symbolName, type] = category;
+    const saved = await prisma.financeCategory.upsert({
+      where: { userId_slug: { userId: user.id, slug } },
+      update: { name, symbolName, type, sortOrder: index, isArchived: false },
+      create: { userId: user.id, slug, name, symbolName, type, sortOrder: index },
+    });
+    categoryIds.set(slug, saved.id);
+  }
+
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+  await prisma.financeMonthlyBudget.upsert({
+    where: { userId_month_currency: { userId: user.id, month: monthStart, currency: 'VND' } },
+    update: { amount: 12000000 },
+    create: { userId: user.id, month: monthStart, amount: 12000000, currency: 'VND' },
+  });
+  await prisma.financeTransaction.deleteMany({ where: { userId: user.id, notes: { startsWith: 'seed-finance-' } } });
+  for (let index = 0; index < 36; index += 1) {
+    const item = financeSeedItems[index % financeSeedItems.length]!;
+    const [categorySlug, type, baseAmount, title] = item;
+    const occurredAt = new Date(now);
+    occurredAt.setUTCDate(Math.max(1, now.getUTCDate() - index));
+    await prisma.financeTransaction.create({ data: {
+      userId: user.id, categoryId: categoryIds.get(categorySlug)!, type,
+      amount: baseAmount + (index % 4) * 10000, title,
+      notes: `seed-finance-${index + 1}`, occurredAt,
+    } });
+  }
+
   console.log(
-    `Curated Nora data for ${user.email} on ${dateKey}: ${topics.length + extraFeedTitles.length} feed insights, ${workItems.length} work items.`,
+    `Curated Nora data for ${user.email} on ${dateKey}: ${topics.length + extraFeedTitles.length} feed insights, ${workItems.length} work items, 36 finance transactions.`,
   );
 }
 

@@ -6,8 +6,15 @@
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
-    { "key": "host", "value": "http://localhost:3000/v1" },
-    { "key": "token", "value": "", "type": "string" }
+    {
+      "key": "host",
+      "value": "http://localhost:3008/v1"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    }
   ],
   "item": [
     {
@@ -15,12 +22,20 @@
       "item": [
         {
           "name": "Health Check",
-          "request": { "auth": { "type": "noauth" }, "method": "GET", "url": "{{host}}/health" }
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "url": "{{host}}/health"
+          }
         },
         {
           "name": "Data Pipeline Health",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
             "url": "{{host}}/health/data-pipeline"
           }
@@ -46,9 +61,16 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\",\n  \"displayName\": \"Nora User\"\n}"
@@ -72,9 +94,16 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"change-this-password\"\n}"
@@ -98,9 +127,16 @@
             }
           ],
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}"
@@ -111,9 +147,16 @@
         {
           "name": "Logout",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"refreshToken\": \"PASTE_REFRESH_TOKEN_HERE\"\n}"
@@ -129,9 +172,17 @@
         {
           "name": "Get My Profile",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/users/me"
           }
         },
@@ -139,10 +190,20 @@
           "name": "Update My Profile",
           "request": {
             "method": "PATCH",
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -154,35 +215,65 @@
         {
           "name": "Clear My Data - Restart Onboarding",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "DELETE",
             "description": "Destructive: clears personalized data but keeps the account and current session.",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/users/me/data"
           }
         },
         {
           "name": "Restart Onboarding by Email - Development Only",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "description": "Development-only. Restarts onboarding while preserving the active account and its existing feed data.",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
             "url": "{{host}}/users/onboarding/restart"
           }
         },
         {
           "name": "Delete Account by Email - Development Only",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "DELETE",
             "description": "Destructive and development-only. Disabled by the backend in production.",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": { "mode": "raw", "raw": "{\n  \"email\": \"user@example.com\"\n}" },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
             "url": "{{host}}/users/account"
           }
         }
@@ -194,18 +285,34 @@
         {
           "name": "List Interests",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/interests"
           }
         },
         {
           "name": "Get Interest Catalog",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/interests/catalog?locale=vi"
           }
         },
@@ -213,10 +320,20 @@
           "name": "Create Interest",
           "request": {
             "method": "POST",
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -229,10 +346,20 @@
           "name": "Update Interest",
           "request": {
             "method": "PATCH",
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -244,9 +371,17 @@
         {
           "name": "Delete Interest",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/interests/REPLACE_INTEREST_ID"
           }
         }
@@ -258,11 +393,21 @@
         {
           "name": "Create Work Item",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
@@ -274,40 +419,77 @@
         {
           "name": "List Work Items",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/work-items?page=1"
           }
         },
         {
           "name": "Get Work Brief",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/work-items/brief"
           }
         },
         {
           "name": "Update Work Item",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "PATCH",
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
-            "body": { "mode": "raw", "raw": "{\n  \"status\": \"DONE\"\n}" },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"DONE\"\n}"
+            },
             "url": "{{host}}/work-items/REPLACE_WORK_ITEM_ID"
           }
         },
         {
           "name": "Delete Work Item",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "DELETE",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/work-items/REPLACE_WORK_ITEM_ID"
           }
         }
@@ -319,36 +501,68 @@
         {
           "name": "Queue Real Data Sync",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/ingestion/sync"
           }
         },
         {
           "name": "Seed Development Data",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "POST",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/dev/seed?date=2026-08-08"
           }
         },
         {
           "name": "Get Home Feed",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/feed?category=all&page=1&locale=vi"
           }
         },
         {
           "name": "Get Interest Insights",
           "request": {
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "method": "GET",
-            "header": [{ "key": "Authorization", "value": "Bearer {{token}}", "type": "text" }],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
             "url": "{{host}}/interests/REPLACE_INTEREST_ID/insights?locale=vi"
           }
         },
@@ -356,16 +570,177 @@
           "name": "Update User Insight",
           "request": {
             "method": "PATCH",
-            "auth": { "type": "noauth" },
+            "auth": {
+              "type": "noauth"
+            },
             "header": [
-              { "key": "Authorization", "value": "Bearer {{token}}", "type": "text" },
-              { "key": "Content-Type", "value": "application/json", "type": "text" }
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
             ],
             "body": {
               "mode": "raw",
               "raw": "{\n  \"status\": \"READ\",\n  \"isSaved\": true,\n  \"isUseful\": true\n}"
             },
             "url": "{{host}}/user-insights/REPLACE_USER_INSIGHT_ID"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Finance",
+      "item": [
+        {
+          "name": "Get Categories",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/finance/categories"
+          }
+        },
+        {
+          "name": "Get Monthly Summary",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/finance/summary?month=2026-08"
+          }
+        },
+        {
+          "name": "Get Monthly Transactions",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/finance/transactions?month=2026-08&page=1"
+          }
+        },
+        {
+          "name": "Create Expense",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"EXPENSE\",\n  \"amount\": \"85000\",\n  \"categoryId\": \"REPLACE_CATEGORY_ID\",\n  \"title\": \"Ăn trưa\",\n  \"notes\": \"Cơm trưa văn phòng\",\n  \"occurredAt\": \"2026-08-12T05:00:00.000Z\"\n}"
+            },
+            "url": "{{host}}/finance/transactions"
+          }
+        },
+        {
+          "name": "Update Transaction",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"95000\",\n  \"title\": \"Ăn trưa cùng team\"\n}"
+            },
+            "url": "{{host}}/finance/transactions/REPLACE_TRANSACTION_ID"
+          }
+        },
+        {
+          "name": "Delete Transaction",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/finance/transactions/REPLACE_TRANSACTION_ID"
+          }
+        },
+        {
+          "name": "Set Monthly Budget",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": \"12000000\",\n  \"currency\": \"VND\"\n}"
+            },
+            "url": "{{host}}/finance/budget?month=2026-08"
           }
         }
       ]

@@ -1,5 +1,10 @@
 # Nora Backend
 
+## Local setup
+
+Xem [SETUP_DATABASE.md](./SETUP_DATABASE.md) để dựng PostgreSQL, Redis, áp dụng
+migrations và seed cùng tài khoản/dữ liệu mẫu trên một máy development khác.
+
 ## Development authentication
 
 The local `.env` issues access tokens for 60 days and refresh tokens for 90 days.
@@ -29,7 +34,7 @@ immediately (also available in the Postman collection):
 curl -X POST \
   -H 'Accept: application/json' \
   -H 'Authorization: Bearer <access-token>' \
-  'http://localhost:3000/v1/ingestion/sync'
+  'http://localhost:3008/v1/ingestion/sync'
 ```
 
 The iOS app reads only persisted API data. Pull to refresh on the Today screen

@@ -1,5 +1,5 @@
-import { WorkItemPriority, WorkItemSource } from '@prisma/client';
-import { IsEnum, IsISO8601, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { WorkItemPriority, WorkItemRecurrenceType, WorkItemSource } from '@prisma/client';
+import { ArrayUnique, IsArray, IsEnum, IsISO8601, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 
 export class CreateWorkItemDto {
   @IsString()
@@ -28,4 +28,39 @@ export class CreateWorkItemDto {
   @IsString()
   @MaxLength(255)
   sourceRef?: string;
+
+  @IsOptional()
+  @IsEnum(WorkItemRecurrenceType)
+  recurrenceType?: WorkItemRecurrenceType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  recurrenceInterval?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(7, { each: true })
+  recurrenceWeekdays?: number[];
+
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(30, { each: true })
+  recurrenceLunarDays?: number[];
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  recurrenceTimezone?: string;
+
+  @IsOptional()
+  @IsISO8601()
+  recurrenceUntil?: string;
 }

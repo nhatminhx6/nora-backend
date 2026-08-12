@@ -133,51 +133,129 @@ enum WorkItemSource {
   CONNECTOR
 }
 
+enum WorkItemRecurrenceType {
+  NONE
+  DAILY
+  WEEKLY
+  LUNAR_MONTHLY
+}
+
+enum FinanceTransactionType {
+  INCOME
+  EXPENSE
+}
+
 model User {
-  id                String         @id @default(uuid()) @db.Uuid
-  email             String         @unique @db.VarChar(320)
-  passwordHash      String?        @map("password_hash") @db.VarChar(255)
-  displayName       String         @map("display_name") @db.VarChar(120)
-  timezone          String         @default("UTC") @db.VarChar(64)
-  locale            String         @default("en") @db.VarChar(16)
-  status            UserStatus     @default(ACTIVE)
-  notificationPrefs Json           @default("{}") @map("notification_prefs") @db.JsonB
-  profileData       Json           @default("{}") @map("profile_data") @db.JsonB
-  lastLoginAt       DateTime?      @map("last_login_at") @db.Timestamptz(3)
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz(3)
-  devices           Device[]
-  refreshTokens     RefreshToken[]
-  interests         Interest[]
-  userInsights      UserInsight[]
-  notifications     Notification[]
-  dailyBriefs       DailyBrief[]
-  watchRules        WatchRule[]
-  workItems         WorkItem[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  email                 String                 @unique @db.VarChar(320)
+  passwordHash          String?                @map("password_hash") @db.VarChar(255)
+  displayName           String                 @map("display_name") @db.VarChar(120)
+  timezone              String                 @default("UTC") @db.VarChar(64)
+  locale                String                 @default("en") @db.VarChar(16)
+  status                UserStatus             @default(ACTIVE)
+  notificationPrefs     Json                   @default("{}") @map("notification_prefs") @db.JsonB
+  profileData           Json                   @default("{}") @map("profile_data") @db.JsonB
+  lastLoginAt           DateTime?              @map("last_login_at") @db.Timestamptz(3)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(3)
+  devices               Device[]
+  refreshTokens         RefreshToken[]
+  interests             Interest[]
+  userInsights          UserInsight[]
+  notifications         Notification[]
+  dailyBriefs           DailyBrief[]
+  watchRules            WatchRule[]
+  workItems             WorkItem[]
+  financeCategories     FinanceCategory[]
+  financeTransactions   FinanceTransaction[]
+  financeMonthlyBudgets FinanceMonthlyBudget[]
 
   @@index([status, createdAt])
   @@index([deletedAt])
   @@map("users")
 }
 
+model FinanceCategory {
+  id           String                 @id @default(uuid()) @db.Uuid
+  userId       String                 @map("user_id") @db.Uuid
+  slug         String                 @db.VarChar(80)
+  name         String                 @db.VarChar(120)
+  symbolName   String                 @map("symbol_name") @db.VarChar(80)
+  type         FinanceTransactionType
+  sortOrder    Int                    @default(0) @map("sort_order")
+  isArchived   Boolean                @default(false) @map("is_archived")
+  createdAt    DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user         User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions FinanceTransaction[]
+
+  @@unique([userId, slug])
+  @@index([userId, type, isArchived])
+  @@map("finance_categories")
+}
+
+model FinanceTransaction {
+  id         String                 @id @default(uuid()) @db.Uuid
+  userId     String                 @map("user_id") @db.Uuid
+  categoryId String                 @map("category_id") @db.Uuid
+  type       FinanceTransactionType
+  amount     Decimal                @db.Decimal(19, 2)
+  currency   String                 @default("VND") @db.VarChar(3)
+  title      String                 @db.VarChar(255)
+  notes      String?                @db.Text
+  occurredAt DateTime               @map("occurred_at") @db.Timestamptz(3)
+  createdAt  DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt  DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category   FinanceCategory        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, occurredAt(sort: Desc)])
+  @@index([userId, type, occurredAt])
+  @@map("finance_transactions")
+}
+
+model FinanceMonthlyBudget {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  month     DateTime @db.Date
+  amount    Decimal  @db.Decimal(19, 2)
+  currency  String   @default("VND") @db.VarChar(3)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, month, currency])
+  @@index([userId, month])
+  @@map("finance_monthly_budgets")
+}
+
 model WorkItem {
-  id          String           @id @default(uuid()) @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  title       String           @db.VarChar(255)
-  notes       String?          @db.Text
-  status      WorkItemStatus   @default(TODO)
-  priority    WorkItemPriority @default(MEDIUM)
-  dueAt       DateTime?        @map("due_at") @db.Timestamptz(3)
-  completedAt DateTime?        @map("completed_at") @db.Timestamptz(3)
-  source      WorkItemSource   @default(MANUAL)
-  sourceRef   String?          @map("source_ref") @db.VarChar(255)
-  metadata    Json             @default("{}") @db.JsonB
-  createdAt   DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
-  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(uuid()) @db.Uuid
+  userId              String                 @map("user_id") @db.Uuid
+  title               String                 @db.VarChar(255)
+  notes               String?                @db.Text
+  status              WorkItemStatus         @default(TODO)
+  priority            WorkItemPriority       @default(MEDIUM)
+  dueAt               DateTime?              @map("due_at") @db.Timestamptz(3)
+  completedAt         DateTime?              @map("completed_at") @db.Timestamptz(3)
+  source              WorkItemSource         @default(MANUAL)
+  sourceRef           String?                @map("source_ref") @db.VarChar(255)
+  metadata            Json                   @default("{}") @db.JsonB
+  recurrenceType      WorkItemRecurrenceType @default(NONE) @map("recurrence_type")
+  recurrenceInterval  Int                    @default(1) @map("recurrence_interval")
+  recurrenceWeekdays  Int[]                  @default([]) @map("recurrence_weekdays")
+  recurrenceLunarDays Int[]                  @default([]) @map("recurrence_lunar_days")
+  recurrenceTimezone  String                 @default("Asia/Ho_Chi_Minh") @map("recurrence_timezone") @db.VarChar(64)
+  recurrenceUntil     DateTime?              @map("recurrence_until") @db.Timestamptz(3)
+  recurrenceSeriesId  String?                @map("recurrence_series_id") @db.Uuid
+  recurrenceSequence  Int                    @default(0) @map("recurrence_sequence")
+  createdAt           DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user                User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, source, sourceRef])
+  @@unique([recurrenceSeriesId, recurrenceSequence])
   @@index([userId, status, dueAt])
   @@index([userId, createdAt(sort: Desc)])
   @@map("work_items")
