@@ -13,6 +13,7 @@ import { UsersModule } from '@nora/users';
 import { ContentModule } from '@nora/content';
 import { WorkItemsModule } from '@nora/work-items';
 import { FinanceModule } from '@nora/finance';
+import { EconomicsModule } from '@nora/economics';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -25,6 +26,7 @@ import { HealthController } from './health.controller';
     ContentModule,
     WorkItemsModule,
     FinanceModule,
+    EconomicsModule,
   ],
   controllers: [HealthController],
   providers: [

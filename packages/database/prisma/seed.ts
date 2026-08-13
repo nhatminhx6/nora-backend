@@ -740,6 +740,24 @@ async function main(): Promise<void> {
     } });
   }
 
+  const economicIndicators = [
+    { key: 'gold-sjc', vi: 'Vàng SJC', en: 'SJC Gold', category: 'COMMODITY', unit: 'triệu đồng/lượng', frequency: 'DAILY', source: 'SJC', url: 'https://sjc.com.vn/', symbol: 'circle.hexagongrid.fill', base: 124.6, step: 0.22 },
+    { key: 'usd-vnd', vi: 'Tỷ giá USD/VND', en: 'USD/VND Exchange Rate', category: 'CURRENCY', unit: 'VND', frequency: 'DAILY', source: 'Ngân hàng Nhà nước Việt Nam', url: 'https://www.sbv.gov.vn/', symbol: 'dollarsign.arrow.circlepath', base: 26180, step: 7.5 },
+    { key: 'vn-index', vi: 'VN-Index', en: 'VN-Index', category: 'MARKET', unit: 'điểm', frequency: 'DAILY', source: 'HOSE', url: 'https://www.hsx.vn/', symbol: 'chart.line.uptrend.xyaxis', base: 1518, step: 1.35 },
+    { key: 'cpi-vietnam', vi: 'Lạm phát CPI', en: 'Vietnam CPI Inflation', category: 'MACRO', unit: '% YoY', frequency: 'MONTHLY', source: 'Cục Thống kê', url: 'https://www.gso.gov.vn/', symbol: 'chart.bar.xaxis', base: 3.42, step: 0.015 },
+    { key: 'policy-rate', vi: 'Lãi suất điều hành', en: 'Policy Rate', category: 'MACRO', unit: '%', frequency: 'MONTHLY', source: 'Ngân hàng Nhà nước Việt Nam', url: 'https://www.sbv.gov.vn/', symbol: 'percent', base: 4.5, step: 0 },
+  ];
+  for (const [sortOrder, definition] of economicIndicators.entries()) {
+    const indicator = await prisma.economicIndicator.upsert({ where: { key: definition.key }, update: { nameVi: definition.vi, nameEn: definition.en, category: definition.category, unit: definition.unit, frequency: definition.frequency, sourceName: definition.source, sourceUrl: definition.url, symbolName: definition.symbol, sortOrder }, create: { key: definition.key, nameVi: definition.vi, nameEn: definition.en, category: definition.category, unit: definition.unit, frequency: definition.frequency, sourceName: definition.source, sourceUrl: definition.url, symbolName: definition.symbol, sortOrder } });
+    for (let offset = 89; offset >= 0; offset -= 1) {
+      const observedAt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - offset));
+      const wave = Math.sin((89 - offset) / 6) * definition.step * 3;
+      const value = definition.base + (89 - offset) * definition.step + wave;
+      const previous = definition.base + Math.max(0, 88 - offset) * definition.step;
+      await prisma.economicIndicatorObservation.upsert({ where: { indicatorId_observedAt: { indicatorId: indicator.id, observedAt } }, update: { value, changeValue: value - previous, changePct: previous === 0 ? 0 : ((value - previous) / previous) * 100 }, create: { indicatorId: indicator.id, observedAt, value, changeValue: value - previous, changePct: previous === 0 ? 0 : ((value - previous) / previous) * 100, metadata: { seeded: true } } });
+    }
+  }
+
   console.log(
     `Curated Nora data for ${user.email} on ${dateKey}: ${topics.length + extraFeedTitles.length} feed insights, ${workItems.length} work items, 36 finance transactions.`,
   );

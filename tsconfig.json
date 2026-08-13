@@ -34,6 +34,7 @@
       "@nora/work-items/*": ["packages/modules/work-items/src/*"]
       ,"@nora/finance": ["packages/modules/finance/src"]
       ,"@nora/finance/*": ["packages/modules/finance/src/*"]
+      ,"@nora/economics": ["packages/modules/economics/src"]
     }
   },
   "include": ["apps/**/*.ts", "packages/**/*.ts"],

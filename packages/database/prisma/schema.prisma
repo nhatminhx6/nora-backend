@@ -176,6 +176,42 @@ model User {
   @@map("users")
 }
 
+model EconomicIndicator {
+  id           String                         @id @default(uuid()) @db.Uuid
+  key          String                         @unique @db.VarChar(80)
+  nameVi       String                         @map("name_vi") @db.VarChar(160)
+  nameEn       String                         @map("name_en") @db.VarChar(160)
+  category     String                         @db.VarChar(60)
+  unit         String                         @db.VarChar(40)
+  frequency    String                         @db.VarChar(30)
+  sourceName   String                         @map("source_name") @db.VarChar(160)
+  sourceUrl    String?                        @map("source_url") @db.Text
+  symbolName   String                         @map("symbol_name") @db.VarChar(80)
+  sortOrder    Int                            @default(0) @map("sort_order")
+  observations EconomicIndicatorObservation[]
+  createdAt    DateTime                       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime                       @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@index([category, sortOrder])
+  @@map("economic_indicators")
+}
+
+model EconomicIndicatorObservation {
+  id          String            @id @default(uuid()) @db.Uuid
+  indicatorId String            @map("indicator_id") @db.Uuid
+  observedAt  DateTime          @map("observed_at") @db.Timestamptz(3)
+  value       Decimal           @db.Decimal(20, 4)
+  changeValue Decimal?          @map("change_value") @db.Decimal(20, 4)
+  changePct   Decimal?          @map("change_pct") @db.Decimal(10, 4)
+  metadata    Json              @default("{}") @db.JsonB
+  indicator   EconomicIndicator @relation(fields: [indicatorId], references: [id], onDelete: Cascade)
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([indicatorId, observedAt])
+  @@index([indicatorId, observedAt(sort: Desc)])
+  @@map("economic_indicator_observations")
+}
+
 model FinanceCategory {
   id           String                 @id @default(uuid()) @db.Uuid
   userId       String                 @map("user_id") @db.Uuid

@@ -744,6 +744,62 @@
           }
         }
       ]
+    },
+    {
+      "name": "Economics",
+      "item": [
+        {
+          "name": "Get Economic Dashboard",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/economics/dashboard?locale=vi"
+          }
+        },
+        {
+          "name": "Get Gold History",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/economics/indicators/gold-sjc?range=3M&locale=vi"
+          }
+        },
+        {
+          "name": "Get Inflation History",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/economics/indicators/cpi-vietnam?range=1Y&locale=vi"
+          }
+        }
+      ]
     }
   ]
 }
