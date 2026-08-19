@@ -6,14 +6,14 @@ import {
   InsightType,
   InterestStatus,
   Prisma,
-  SourceKind,
   SourceStatus,
   SubscriptionStatus,
 } from '@prisma/client';
 import { PrismaService } from '@nora/database';
 import { NormalizedSourceItem } from './source-adapter';
 import { RssSourceAdapter } from './rss-source.adapter';
-import { SourceProfile, sourceProfile } from './source-profile';
+import { SourceProfile } from './source-profile';
+import { sourceProfile } from './source-registry';
 import { TRANSLATION_PROVIDER, TranslationProvider } from './translation-provider';
 import { IngestionQueue } from './ingestion.queue';
 import { LocalizationQualityValidator } from './localization-quality.validator';
@@ -24,6 +24,17 @@ type SupportedLocale = 'vi' | 'en';
 
 const DAILY_BRIEF_ITEM_LIMIT = 10;
 const LOCALIZATION_PROMPT_VERSION = 'localization-quality-v2';
+const LEGACY_VALIDATION_FAILURE_LIMIT = 3;
+
+export function shouldOpenLegacyValidationCircuit(
+  errors: string[],
+  consecutiveAccessFailures: number,
+): boolean {
+  return (
+    consecutiveAccessFailures >= LEGACY_VALIDATION_FAILURE_LIMIT &&
+    errors.some((error) => ['HTTP_403', 'HTTP_429', 'FETCH_FAILED'].includes(error))
+  );
+}
 
 interface LocalizedInsight {
   locale: SupportedLocale;
@@ -73,8 +84,10 @@ export class IngestionService {
         const searchTerms = this.interestSearchTerms(interest.name, interest.config);
         const topicKey = interest.topicKey ?? this.topicKey(interest.config);
         const profile = sourceProfile(topicKey);
+        if (profile.language === 'zh-Hans') throw new Error('SOURCE_LANGUAGE_DISABLED');
+        const sourceLanguage = profile.language;
         const feedUrl = profile.feedUrl;
-        const source = await this.ensureSource(topicKey, profile);
+        const source = await this.ensureSource(profile);
         const subscription = await this.prisma.sourceSubscription.upsert({
           where: {
             sourceId_subscriptionKey: {
@@ -102,7 +115,7 @@ export class IngestionService {
             const item = this.rssAdapter.normalize(payload);
             if (!item) return [];
             item.publisher = profile.name;
-            item.language = profile.locale;
+            item.language = sourceLanguage;
             return [item];
           });
           feedCache.set(feedUrl, fetchedItems);
@@ -110,20 +123,36 @@ export class IngestionService {
         const items = fetchedItems
           .filter(
             (item) =>
-              profile.scopedToInterest ||
+              profile.selectionPolicy === 'ALL_ITEMS' ||
               this.matchesAnyTerm(searchTerms, `${item.title} ${item.content}`),
           )
           .sort((left, right) => right.publishedAt.getTime() - left.publishedAt.getTime());
+        let consecutiveAccessFailures = 0;
         for (const item of items) {
+          if (item.metadata.validationRejected === 'true') continue;
           if (!item.metadata.verifiedAt) {
             const validation = await this.rssAdapter.validate(item);
             if (!validation.valid || !validation.canonicalUrl || !validation.verifiedAt) {
+              item.metadata.validationRejected = 'true';
+              item.metadata.validationErrors = validation.errors.join(',');
               await this.rejectExistingEvent(source.id, item, validation.errors);
               this.logger.warn(
                 `Rejected RSS item ${item.externalId}: ${validation.errors.join(',')}`,
               );
+              consecutiveAccessFailures = validation.errors.some((error) =>
+                ['HTTP_403', 'HTTP_429', 'FETCH_FAILED'].includes(error),
+              )
+                ? consecutiveAccessFailures + 1
+                : 0;
+              if (shouldOpenLegacyValidationCircuit(validation.errors, consecutiveAccessFailures)) {
+                this.logger.warn(
+                  `Stopped detail validation for ${profile.slug}: repeated source access failures`,
+                );
+                break;
+              }
               continue;
             }
+            consecutiveAccessFailures = 0;
             item.canonicalUrl = validation.canonicalUrl;
             item.metadata.verifiedAt = validation.verifiedAt.toISOString();
           }
@@ -199,37 +228,48 @@ export class IngestionService {
     });
   }
 
-  private async ensureSource(topicKey: string, profile: SourceProfile) {
+  private async ensureSource(profile: SourceProfile) {
     return this.prisma.source.upsert({
       where: { slug: profile.slug },
       update: {
         name: profile.name,
-        status: SourceStatus.ACTIVE,
+        kind: profile.kind,
+        status: profile.enabled ? SourceStatus.ACTIVE : SourceStatus.DISABLED,
         baseUrl: profile.feedUrl,
         adapterKey: profile.adapterKey,
+        defaultIntervalSec: profile.updateIntervalSec,
+        rateLimitPerMinute: profile.rateLimitPerMinute,
         config: {
-          locale: profile.locale,
-          country: profile.country,
-          topicKey,
+          language: profile.language,
+          markets: profile.markets,
+          topics: profile.topics,
           sourceTier: profile.sourceTier,
-          scopedToInterest: profile.scopedToInterest,
+          authorityScore: profile.authorityScore,
+          licensePolicy: profile.licensePolicy,
+          verificationPolicy: profile.verificationPolicy,
+          selectionPolicy: profile.selectionPolicy,
+          enabled: profile.enabled,
         },
       },
       create: {
         name: profile.name,
         slug: profile.slug,
-        kind: SourceKind.RSS,
+        kind: profile.kind,
         adapterKey: profile.adapterKey,
         baseUrl: profile.feedUrl,
-        status: SourceStatus.ACTIVE,
-        defaultIntervalSec: 900,
-        rateLimitPerMinute: 30,
+        status: profile.enabled ? SourceStatus.ACTIVE : SourceStatus.DISABLED,
+        defaultIntervalSec: profile.updateIntervalSec,
+        rateLimitPerMinute: profile.rateLimitPerMinute,
         config: {
-          locale: profile.locale,
-          country: profile.country,
-          topicKey,
+          language: profile.language,
+          markets: profile.markets,
+          topics: profile.topics,
           sourceTier: profile.sourceTier,
-          scopedToInterest: profile.scopedToInterest,
+          authorityScore: profile.authorityScore,
+          licensePolicy: profile.licensePolicy,
+          verificationPolicy: profile.verificationPolicy,
+          selectionPolicy: profile.selectionPolicy,
+          enabled: profile.enabled,
         },
       },
     });
@@ -241,7 +281,7 @@ export class IngestionService {
     sourceId: string;
     subscriptionId: string;
     item: FeedItem;
-    sourceTier: 1 | 2;
+    sourceTier: 1 | 2 | 3;
   }) {
     const externalId = this.hash(input.item.canonicalUrl);
     const contentHash = this.hash(`${input.item.title}\n${input.item.content}`);
@@ -377,7 +417,7 @@ export class IngestionService {
     input: {
       subscriptionId: string;
       item: FeedItem;
-      sourceTier: 1 | 2;
+      sourceTier: 1 | 2 | 3;
     },
     externalId: string,
     contentHash: string,

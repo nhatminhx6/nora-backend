@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { defaultMarketPreferences } from '@nora/common';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { UsersRepository } from './users.repository';
 
@@ -9,6 +10,8 @@ export interface UserProfile {
   displayName: string;
   timezone: string;
   locale: string;
+  homeMarket: string;
+  followedMarkets: string[];
   createdAt: Date;
   updatedAt: Date;
   notificationPrefs: unknown;
@@ -52,6 +55,8 @@ export class UsersService {
       displayName: user.displayName,
       timezone: user.timezone,
       locale: user.locale,
+      homeMarket: user.homeMarket,
+      followedMarkets: user.followedMarkets,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       notificationPrefs: user.notificationPrefs,
@@ -72,12 +77,28 @@ export class UsersService {
       ...(dto.dailyBriefTime === undefined ? {} : { dailyBriefTime: dto.dailyBriefTime }),
     };
     const currentProfileData = this.asObject(current.profileData);
+    const locale = (dto.locale?.trim() ?? current.locale) as 'vi' | 'en';
+    const onboardingDefaults =
+      dto.onboardingCompleted === true && currentProfileData.onboardingCompleted !== true
+        ? defaultMarketPreferences(locale)
+        : null;
+    const homeMarket = dto.homeMarket ?? onboardingDefaults?.homeMarket ?? current.homeMarket;
+    const followedMarkets = [
+      ...new Set(
+        (
+          dto.followedMarkets ??
+          onboardingDefaults?.followedMarkets ??
+          current.followedMarkets
+        ).filter((market) => market !== homeMarket),
+      ),
+    ];
     const profileData = {
       ...currentProfileData,
       ...(dto.onboardingCompleted === undefined
         ? {}
         : { onboardingCompleted: dto.onboardingCompleted }),
       ...(dto.onboardingCompleted === true ? { onboardingRestartToken: null } : {}),
+      ...(dto.onboardingCompleted === true ? { contentFeedVersion: 'v2' } : {}),
       ...(dto.profession === undefined ? {} : { profession: dto.profession.trim() || null }),
       ...(dto.interests === undefined
         ? {}
@@ -93,6 +114,8 @@ export class UsersService {
       ...(dto.displayName === undefined ? {} : { displayName: dto.displayName.trim() }),
       ...(dto.timezone === undefined ? {} : { timezone: dto.timezone.trim() }),
       ...(dto.locale === undefined ? {} : { locale: dto.locale.trim() }),
+      homeMarket,
+      followedMarkets,
       notificationPrefs,
       profileData,
     });
@@ -103,6 +126,8 @@ export class UsersService {
       displayName: user.displayName,
       timezone: user.timezone,
       locale: user.locale,
+      homeMarket: user.homeMarket,
+      followedMarkets: user.followedMarkets,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       notificationPrefs: user.notificationPrefs,

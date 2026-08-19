@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CurrentUser, JwtAuthGuard, JwtUser } from '@nora/auth';
-import { IngestionService } from '@nora/ingestion';
 import { ContentService } from './content.service';
 import { UpdateUserInsightDto } from './update-user-insight.dto';
+import { FeedV2Service } from './feed-v2.service';
 
 @ApiTags('content')
 @ApiBearerAuth()
@@ -11,13 +11,18 @@ import { UpdateUserInsightDto } from './update-user-insight.dto';
 export class ContentController {
   constructor(
     private readonly contentService: ContentService,
-    private readonly ingestionService: IngestionService,
+    private readonly feedV2Service: FeedV2Service,
   ) {}
 
-  @Post('ingestion/sync')
+  @Get('v2/feed')
   @JwtAuthGuard()
-  async syncRealData(@CurrentUser() user: JwtUser) {
-    return this.ingestionService.syncUser(user.id);
+  getFeedV2(
+    @CurrentUser() user: JwtUser,
+    @Query('locale') locale?: string,
+    @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.feedV2Service.getFeed(user.id, locale, cursor, limit);
   }
 
   @Post('dev/seed')

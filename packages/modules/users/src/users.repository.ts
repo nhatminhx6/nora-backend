@@ -21,6 +21,8 @@ export class UsersRepository {
       displayName?: string;
       timezone?: string;
       locale?: string;
+      homeMarket?: string;
+      followedMarkets?: string[];
       notificationPrefs?: Prisma.InputJsonValue;
       profileData?: Prisma.InputJsonValue;
     },

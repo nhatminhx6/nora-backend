@@ -58,6 +58,13 @@ enum SubscriptionStatus {
   ERROR
 }
 
+enum SourceCircuitState {
+  CLOSED
+  OPEN
+  HALF_OPEN
+  MANUAL_PAUSED
+}
+
 enum EventStatus {
   PENDING
   PROCESSED
@@ -145,31 +152,75 @@ enum FinanceTransactionType {
   EXPENSE
 }
 
+enum ContentRetentionPolicy {
+  FULL_TEXT
+  EXCERPT_ONLY
+  METADATA_ONLY
+}
+
+enum CanonicalContentStatus {
+  PENDING
+  READY
+  REJECTED
+  RETRACTED
+  FAILED
+}
+
+enum ContentProvenanceStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  NEEDS_REVIEW
+}
+
+enum ContentLocalizationStatus {
+  PENDING
+  GENERATING
+  VERIFIED
+  REJECTED
+  FAILED
+}
+
+enum ContentClusterStatus {
+  ACTIVE
+  REBUILDING
+  ARCHIVED
+}
+
+enum ContentAudienceMatchStatus {
+  ACTIVE
+  HIDDEN
+  EXPIRED
+}
+
 model User {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  email                 String                 @unique @db.VarChar(320)
-  passwordHash          String?                @map("password_hash") @db.VarChar(255)
-  displayName           String                 @map("display_name") @db.VarChar(120)
-  timezone              String                 @default("UTC") @db.VarChar(64)
-  locale                String                 @default("en") @db.VarChar(16)
-  status                UserStatus             @default(ACTIVE)
-  notificationPrefs     Json                   @default("{}") @map("notification_prefs") @db.JsonB
-  profileData           Json                   @default("{}") @map("profile_data") @db.JsonB
-  lastLoginAt           DateTime?              @map("last_login_at") @db.Timestamptz(3)
-  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
-  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(3)
-  devices               Device[]
-  refreshTokens         RefreshToken[]
-  interests             Interest[]
-  userInsights          UserInsight[]
-  notifications         Notification[]
-  dailyBriefs           DailyBrief[]
-  watchRules            WatchRule[]
-  workItems             WorkItem[]
-  financeCategories     FinanceCategory[]
-  financeTransactions   FinanceTransaction[]
-  financeMonthlyBudgets FinanceMonthlyBudget[]
+  id                     String                 @id @default(uuid()) @db.Uuid
+  email                  String                 @unique @db.VarChar(320)
+  passwordHash           String?                @map("password_hash") @db.VarChar(255)
+  displayName            String                 @map("display_name") @db.VarChar(120)
+  timezone               String                 @default("UTC") @db.VarChar(64)
+  locale                 String                 @default("en") @db.VarChar(16)
+  homeMarket             String                 @default("GLOBAL") @map("home_market") @db.VarChar(16)
+  followedMarkets        String[]               @default([]) @map("followed_markets")
+  status                 UserStatus             @default(ACTIVE)
+  notificationPrefs      Json                   @default("{}") @map("notification_prefs") @db.JsonB
+  profileData            Json                   @default("{}") @map("profile_data") @db.JsonB
+  lastLoginAt            DateTime?              @map("last_login_at") @db.Timestamptz(3)
+  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt              DateTime?              @map("deleted_at") @db.Timestamptz(3)
+  devices                Device[]
+  refreshTokens          RefreshToken[]
+  interests              Interest[]
+  userInsights           UserInsight[]
+  notifications          Notification[]
+  dailyBriefs            DailyBrief[]
+  watchRules             WatchRule[]
+  workItems              WorkItem[]
+  financeCategories      FinanceCategory[]
+  financeTransactions    FinanceTransaction[]
+  financeMonthlyBudgets  FinanceMonthlyBudget[]
+  contentAudienceMatches ContentAudienceMatch[]
 
   @@index([status, createdAt])
   @@index([deletedAt])
@@ -419,6 +470,8 @@ model Source {
   updatedAt          DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
   subscriptions      SourceSubscription[]
   events             Event[]
+  rawPayloads        RawSourcePayload[]
+  canonicalContents  CanonicalContent[]
 
   @@index([status, kind])
   @@index([adapterKey])
@@ -439,14 +492,24 @@ model SourceSubscription {
   lastSuccessAt       DateTime?          @map("last_success_at") @db.Timestamptz(3)
   consecutiveFailures Int                @default(0) @map("consecutive_failures")
   lastErrorCode       String?            @map("last_error_code") @db.VarChar(64)
+  circuitState        SourceCircuitState @default(CLOSED) @map("circuit_state")
+  circuitOpenedAt     DateTime?          @map("circuit_opened_at") @db.Timestamptz(3)
+  nextProbeAt         DateTime?          @map("next_probe_at") @db.Timestamptz(3)
+  healthMetrics       Json               @default("{}") @map("health_metrics") @db.JsonB
+  leaseOwner          String?            @map("lease_owner") @db.VarChar(160)
+  leaseExpiresAt      DateTime?          @map("lease_expires_at") @db.Timestamptz(3)
+  lastClaimedAt       DateTime?          @map("last_claimed_at") @db.Timestamptz(3)
   createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   source              Source             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   entity              Entity?            @relation(fields: [entityId], references: [id], onDelete: SetNull)
   events              Event[]
+  rawPayloads         RawSourcePayload[]
 
   @@unique([sourceId, subscriptionKey])
   @@index([status, nextSyncAt])
+  @@index([status, nextSyncAt, leaseExpiresAt])
+  @@index([circuitState, nextProbeAt])
   @@index([entityId, status])
   @@map("source_subscriptions")
 }
@@ -547,7 +610,7 @@ model InsightLocalization {
 
   @@unique([insightId, locale])
   @@index([locale, updatedAt(sort: Desc)])
-  @@index([sourceContentHash, locale, promptVersion])
+  @@index([sourceContentHash, locale, promptVersion], map: "insight_localizations_source_content_hash_locale_prompt_version")
   @@map("insight_localizations")
 }
 
@@ -572,8 +635,8 @@ model InsightLocalizationRevision {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   insight           Insight  @relation(fields: [insightId], references: [id], onDelete: Cascade)
 
-  @@unique([insightId, locale, sourceContentHash, promptVersion])
-  @@index([locale, validationStatus, createdAt(sort: Desc)])
+  @@unique([insightId, locale, sourceContentHash, promptVersion], map: "insight_localization_revisions_identity_key")
+  @@index([locale, validationStatus, createdAt(sort: Desc)], map: "insight_localization_revisions_quality_idx")
   @@map("insight_localization_revisions")
 }
 
@@ -595,6 +658,262 @@ model PipelineRun {
   @@index([pipeline, status, startedAt(sort: Desc)])
   @@index([errorCode, startedAt(sort: Desc)])
   @@map("pipeline_runs")
+}
+
+model RawSourcePayload {
+  id                String                 @id @default(uuid()) @db.Uuid
+  sourceId          String                 @map("source_id") @db.Uuid
+  subscriptionId    String?                @map("subscription_id") @db.Uuid
+  externalId        String?                @map("external_id") @db.VarChar(512)
+  requestUrl        String                 @map("request_url") @db.Text
+  finalUrl          String?                @map("final_url") @db.Text
+  httpStatus        Int?                   @map("http_status")
+  contentType       String?                @map("content_type") @db.VarChar(255)
+  payload           Bytes?
+  payloadRef        String?                @map("payload_ref") @db.Text
+  payloadHash       String                 @map("payload_hash") @db.VarChar(64)
+  fetchedAt         DateTime               @map("fetched_at") @db.Timestamptz(3)
+  retentionPolicy   ContentRetentionPolicy @map("retention_policy")
+  expiresAt         DateTime?              @map("expires_at") @db.Timestamptz(3)
+  metadata          Json                   @default("{}") @db.JsonB
+  createdAt         DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  source            Source                 @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  subscription      SourceSubscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  canonicalContents CanonicalContent[]
+
+  @@unique([sourceId, payloadHash])
+  @@index([subscriptionId, fetchedAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("raw_source_payloads")
+}
+
+model CanonicalContent {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  sourceId            String                  @map("source_id") @db.Uuid
+  rawPayloadId        String?                 @map("raw_payload_id") @db.Uuid
+  canonicalUrl        String?                 @unique @map("canonical_url") @db.Text
+  externalId          String                  @map("external_id") @db.VarChar(512)
+  contentHash         String                  @map("content_hash") @db.VarChar(64)
+  originalTitle       String                  @map("original_title") @db.Text
+  originalContent     String?                 @map("original_content") @db.Text
+  originalExcerpt     String?                 @map("original_excerpt") @db.Text
+  sourceLanguage      String                  @map("source_language") @db.VarChar(16)
+  publisher           String                  @db.VarChar(255)
+  author              String?                 @db.VarChar(255)
+  publishedAt         DateTime                @map("published_at") @db.Timestamptz(3)
+  updatedAtFromSource DateTime?               @map("updated_at_from_source") @db.Timestamptz(3)
+  verifiedAt          DateTime?               @map("verified_at") @db.Timestamptz(3)
+  status              CanonicalContentStatus  @default(PENDING)
+  provenanceStatus    ContentProvenanceStatus @default(PENDING) @map("provenance_status")
+  markets             String[]                @default([])
+  topics              String[]                @default([])
+  sourceTier          Int                     @map("source_tier")
+  authorityScore      Decimal                 @map("authority_score") @db.Decimal(5, 4)
+  duplicateOfId       String?                 @map("duplicate_of_id") @db.Uuid
+  duplicateKind       String?                 @map("duplicate_kind") @db.VarChar(40)
+  duplicateScore      Decimal?                @map("duplicate_score") @db.Decimal(5, 4)
+  metadata            Json                    @default("{}") @db.JsonB
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt           DateTime                @updatedAt @map("updated_at") @db.Timestamptz(3)
+  source              Source                  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  rawPayload          RawSourcePayload?       @relation(fields: [rawPayloadId], references: [id], onDelete: SetNull)
+  revisions           ContentRevision[]
+  claims              ContentClaim[]
+  localizations       ContentLocalization[]
+  clusterMemberships  ContentClusterMember[]
+  primaryForClusters  ContentCluster[]        @relation("ContentClusterPrimary")
+  audienceMatches     ContentAudienceMatch[]
+  duplicateOf         CanonicalContent?       @relation("CanonicalDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates          CanonicalContent[]      @relation("CanonicalDuplicates")
+
+  @@unique([sourceId, externalId])
+  @@index([contentHash])
+  @@index([status, publishedAt(sort: Desc)])
+  @@index([provenanceStatus, verifiedAt(sort: Desc)])
+  @@index([rawPayloadId])
+  @@index([duplicateOfId])
+  @@map("canonical_contents")
+}
+
+model ContentRevision {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  canonicalContentId  String                  @map("canonical_content_id") @db.Uuid
+  revisionNumber      Int                     @map("revision_number")
+  contentHash         String                  @map("content_hash") @db.VarChar(64)
+  canonicalUrl        String?                 @map("canonical_url") @db.Text
+  originalTitle       String                  @map("original_title") @db.Text
+  originalContent     String?                 @map("original_content") @db.Text
+  originalExcerpt     String?                 @map("original_excerpt") @db.Text
+  sourceLanguage      String                  @map("source_language") @db.VarChar(16)
+  publisher           String                  @db.VarChar(255)
+  author              String?                 @db.VarChar(255)
+  publishedAt         DateTime                @map("published_at") @db.Timestamptz(3)
+  updatedAtFromSource DateTime?               @map("updated_at_from_source") @db.Timestamptz(3)
+  provenanceStatus    ContentProvenanceStatus @map("provenance_status")
+  changeReason        String                  @map("change_reason") @db.VarChar(120)
+  metadata            Json                    @default("{}") @db.JsonB
+  createdAt           DateTime                @default(now()) @map("created_at") @db.Timestamptz(3)
+  canonicalContent    CanonicalContent        @relation(fields: [canonicalContentId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalContentId, revisionNumber])
+  @@index([canonicalContentId, contentHash])
+  @@map("content_revisions")
+}
+
+model ContentClaim {
+  id                 String           @id @default(uuid()) @db.Uuid
+  canonicalContentId String           @map("canonical_content_id") @db.Uuid
+  claimHash          String           @map("claim_hash") @db.VarChar(64)
+  claimType          String           @map("claim_type") @db.VarChar(64)
+  text               String           @db.Text
+  evidence           Json             @default("[]") @db.JsonB
+  entities           String[]         @default([])
+  numbers            Json             @default("[]") @db.JsonB
+  dates              DateTime[]       @default([]) @db.Timestamptz(3)
+  certainty          String?          @db.VarChar(32)
+  attribution        String?          @db.Text
+  extractionVersion  String           @map("extraction_version") @db.VarChar(64)
+  metadata           Json             @default("{}") @db.JsonB
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  canonicalContent   CanonicalContent @relation(fields: [canonicalContentId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalContentId, claimHash, extractionVersion])
+  @@index([claimType, createdAt(sort: Desc)])
+  @@map("content_claims")
+}
+
+model ContentLocalization {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  canonicalContentId String                        @map("canonical_content_id") @db.Uuid
+  locale             String                        @db.VarChar(16)
+  sourceContentHash  String                        @map("source_content_hash") @db.VarChar(64)
+  policyVersion      String                        @map("policy_version") @db.VarChar(64)
+  glossaryVersion    String                        @map("glossary_version") @db.VarChar(64)
+  title              String?                       @db.Text
+  summary            String?                       @db.Text
+  claims             Json                          @default("[]") @db.JsonB
+  status             ContentLocalizationStatus     @default(PENDING)
+  qualityScore       Decimal?                      @map("quality_score") @db.Decimal(5, 4)
+  failureCodes       String[]                      @default([]) @map("failure_codes")
+  provider           String?                       @db.VarChar(64)
+  model              String?                       @db.VarChar(120)
+  generatedAt        DateTime?                     @map("generated_at") @db.Timestamptz(3)
+  verifiedAt         DateTime?                     @map("verified_at") @db.Timestamptz(3)
+  metadata           Json                          @default("{}") @db.JsonB
+  createdAt          DateTime                      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  canonicalContent   CanonicalContent              @relation(fields: [canonicalContentId], references: [id], onDelete: Cascade)
+  revisions          ContentLocalizationRevision[]
+
+  @@unique([canonicalContentId, locale, sourceContentHash, policyVersion, glossaryVersion])
+  @@index([locale, status, verifiedAt(sort: Desc)])
+  @@map("content_localizations")
+}
+
+model ContentLocalizationRevision {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  contentLocalizationId String                    @map("content_localization_id") @db.Uuid
+  attemptNumber         Int                       @map("attempt_number")
+  title                 String?                   @db.Text
+  summary               String?                   @db.Text
+  claims                Json                      @default("[]") @db.JsonB
+  status                ContentLocalizationStatus
+  qualityScore          Decimal?                  @map("quality_score") @db.Decimal(5, 4)
+  failureCodes          String[]                  @default([]) @map("failure_codes")
+  evidence              Json                      @default("[]") @db.JsonB
+  provider              String?                   @db.VarChar(64)
+  model                 String?                   @db.VarChar(120)
+  correctionReason      String?                   @map("correction_reason") @db.VarChar(120)
+  metadata              Json                      @default("{}") @db.JsonB
+  createdAt             DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  contentLocalization   ContentLocalization       @relation(fields: [contentLocalizationId], references: [id], onDelete: Cascade)
+
+  @@unique([contentLocalizationId, attemptNumber])
+  @@index([status, createdAt(sort: Desc)])
+  @@map("content_localization_revisions")
+}
+
+model ContentCluster {
+  id                        String                 @id @default(uuid()) @db.Uuid
+  clusterKey                String                 @unique @map("cluster_key") @db.VarChar(255)
+  primaryCanonicalContentId String?                @map("primary_canonical_content_id") @db.Uuid
+  policyVersion             String                 @map("policy_version") @db.VarChar(64)
+  status                    ContentClusterStatus   @default(ACTIVE)
+  title                     String?                @db.Text
+  primaryEntities           String[]               @default([]) @map("primary_entities")
+  protectedValues           Json                   @default("[]") @map("protected_values") @db.JsonB
+  eventStartedAt            DateTime?              @map("event_started_at") @db.Timestamptz(3)
+  metadata                  Json                   @default("{}") @db.JsonB
+  createdAt                 DateTime               @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime               @updatedAt @map("updated_at") @db.Timestamptz(3)
+  primaryCanonicalContent   CanonicalContent?      @relation("ContentClusterPrimary", fields: [primaryCanonicalContentId], references: [id], onDelete: SetNull)
+  members                   ContentClusterMember[]
+  audienceMatches           ContentAudienceMatch[]
+
+  @@index([status, eventStartedAt(sort: Desc)])
+  @@index([primaryCanonicalContentId])
+  @@map("content_clusters")
+}
+
+model ContentClusterMember {
+  id                 String           @id @default(uuid()) @db.Uuid
+  clusterId          String           @map("cluster_id") @db.Uuid
+  canonicalContentId String           @map("canonical_content_id") @db.Uuid
+  similarityScore    Decimal?         @map("similarity_score") @db.Decimal(5, 4)
+  membershipReason   Json             @default("{}") @map("membership_reason") @db.JsonB
+  isPrimary          Boolean          @default(false) @map("is_primary")
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  cluster            ContentCluster   @relation(fields: [clusterId], references: [id], onDelete: Cascade)
+  canonicalContent   CanonicalContent @relation(fields: [canonicalContentId], references: [id], onDelete: Cascade)
+
+  @@unique([clusterId, canonicalContentId])
+  @@index([canonicalContentId])
+  @@map("content_cluster_members")
+}
+
+model TerminologyEntry {
+  id                   String   @id @default(uuid()) @db.Uuid
+  sourceLanguage       String   @map("source_language") @db.VarChar(16)
+  targetLocale         String   @map("target_locale") @db.VarChar(16)
+  sourceTerm           String   @map("source_term") @db.VarChar(255)
+  normalizedSourceTerm String   @map("normalized_source_term") @db.VarChar(255)
+  preferredTerm        String   @map("preferred_term") @db.VarChar(255)
+  shortTerm            String?  @map("short_term") @db.VarChar(120)
+  protected            Boolean  @default(false)
+  domain               String   @db.VarChar(80)
+  version              String   @db.VarChar(64)
+  metadata             Json     @default("{}") @db.JsonB
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([sourceLanguage, targetLocale, normalizedSourceTerm, domain, version])
+  @@index([targetLocale, domain, version])
+  @@map("terminology_entries")
+}
+
+model ContentAudienceMatch {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  userId             String                     @map("user_id") @db.Uuid
+  canonicalContentId String                     @map("canonical_content_id") @db.Uuid
+  clusterId          String?                    @map("cluster_id") @db.Uuid
+  locale             String                     @db.VarChar(16)
+  policyVersion      String                     @map("policy_version") @db.VarChar(64)
+  relevanceScore     Decimal                    @map("relevance_score") @db.Decimal(7, 4)
+  rankingScore       Decimal?                   @map("ranking_score") @db.Decimal(7, 4)
+  matchedReason      Json                       @default("{}") @map("matched_reason") @db.JsonB
+  status             ContentAudienceMatchStatus @default(ACTIVE)
+  expiresAt          DateTime?                  @map("expires_at") @db.Timestamptz(3)
+  metadata           Json                       @default("{}") @db.JsonB
+  createdAt          DateTime                   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  user               User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  canonicalContent   CanonicalContent           @relation(fields: [canonicalContentId], references: [id], onDelete: Cascade)
+  cluster            ContentCluster?            @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, canonicalContentId, locale, policyVersion])
+  @@index([userId, status, rankingScore(sort: Desc), createdAt(sort: Desc)])
+  @@index([clusterId])
+  @@map("content_audience_matches")
 }
 
 model InsightEvent {

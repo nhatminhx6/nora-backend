@@ -32,8 +32,25 @@ export class UpdateProfileDto {
   @ApiPropertyOptional({ example: 'vi' })
   @IsOptional()
   @IsString({ message: 'locale must be a string' })
+  @IsIn(['vi', 'en'], { message: 'locale must be one of: vi, en' })
   @MaxLength(16, { message: 'locale must not exceed 16 characters' })
   locale?: string;
+
+  @ApiPropertyOptional({ enum: ['VN', 'GLOBAL', 'US', 'CN'] })
+  @IsOptional()
+  @IsIn(['VN', 'GLOBAL', 'US', 'CN'], {
+    message: 'homeMarket must be one of: VN, GLOBAL, US, CN',
+  })
+  homeMarket?: 'VN' | 'GLOBAL' | 'US' | 'CN';
+
+  @ApiPropertyOptional({ enum: ['VN', 'GLOBAL', 'US', 'CN'], isArray: true })
+  @IsOptional()
+  @IsArray({ message: 'followedMarkets must be an array' })
+  @IsIn(['VN', 'GLOBAL', 'US', 'CN'], {
+    each: true,
+    message: 'each followed market must be one of: VN, GLOBAL, US, CN',
+  })
+  followedMarkets?: Array<'VN' | 'GLOBAL' | 'US' | 'CN'>;
 
   @ApiPropertyOptional({ enum: ['minimal', 'balanced', 'active'] })
   @IsOptional()

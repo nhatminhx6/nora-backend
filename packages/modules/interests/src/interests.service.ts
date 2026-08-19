@@ -9,18 +9,25 @@ import { CreateInterestDto } from './dto/create-interest.dto';
 import { UpdateInterestDto } from './dto/update-interest.dto';
 import { InterestsRepository } from './interests.repository';
 import { parseLocale, TOPIC_CATALOG } from './topic-catalog';
+import { PreparedContentService } from './prepared-content.service';
 
 @Injectable()
 export class InterestsService {
-  constructor(private readonly interestsRepository: InterestsRepository) {}
+  constructor(
+    private readonly interestsRepository: InterestsRepository,
+    private readonly preparedContent: PreparedContentService,
+  ) {}
 
   list(userId: string): Promise<Interest[]> {
     return this.interestsRepository.list(userId);
   }
 
-  catalog(rawLocale?: string) {
+  async catalog(rawLocale?: string) {
     const locale = parseLocale(rawLocale);
-    return TOPIC_CATALOG.map((topic) => ({
+    const inventory = await this.preparedContent.topicInventory(locale);
+    const inventoryByKey = new Map(inventory.map((item) => [item.key, item]));
+    const available = await this.preparedContent.availableTopicKeys(locale);
+    return TOPIC_CATALOG.filter((topic) => available.has(topic.key)).map((topic) => ({
       key: topic.key,
       name: topic.names[locale],
       description: topic.descriptions[locale],
@@ -28,6 +35,7 @@ export class InterestsService {
       symbol: topic.symbol,
       refinementLabel: topic.refinementLabels[locale],
       refinementPlaceholder: topic.refinementPlaceholders[locale],
+      inventory: inventoryByKey.get(topic.key),
     }));
   }
 
@@ -46,7 +54,7 @@ export class InterestsService {
     const name = topic.names.en;
     const clientConfig = dto.config ?? {};
     try {
-      return await this.interestsRepository.create({
+      const interest = await this.interestsRepository.create({
         userId,
         topicKey,
         name,
@@ -61,6 +69,8 @@ export class InterestsService {
           queryTerms: [name, ...refinements],
         } as Prisma.InputJsonObject,
       });
+      await this.preparedContent.matchUser(userId);
+      return interest;
     } catch (error) {
       this.handleUniqueName(error);
       throw error;
@@ -76,13 +86,15 @@ export class InterestsService {
     }
     const name = dto.name?.trim();
     try {
-      return await this.interestsRepository.update(id, {
+      const interest = await this.interestsRepository.update(id, {
         ...(name === undefined ? {} : { name, normalizedName: this.normalizeName(name) }),
         ...(dto.description === undefined ? {} : { description: dto.description.trim() }),
         ...(dto.type === undefined ? {} : { type: dto.type }),
         ...(dto.status === undefined ? {} : { status: dto.status }),
         ...(dto.config === undefined ? {} : { config: dto.config as Prisma.InputJsonObject }),
       });
+      await this.preparedContent.matchUser(userId);
+      return interest;
     } catch (error) {
       this.handleUniqueName(error);
       throw error;
@@ -96,6 +108,7 @@ export class InterestsService {
         message: 'Interest was not found',
       });
     }
+    await this.preparedContent.matchUser(userId);
   }
 
   private normalizeName(name: string): string {

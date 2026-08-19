@@ -1,12 +1,12 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '@nora/auth';
-import { IngestionModule } from '@nora/ingestion';
 import { ContentController } from './content.controller';
 import { ContentService } from './content.service';
+import { FeedV2Service } from './feed-v2.service';
 
 @Module({
-  imports: [AuthModule, IngestionModule],
+  imports: [AuthModule],
   controllers: [ContentController],
-  providers: [ContentService],
+  providers: [ContentService, FeedV2Service],
 })
 export class ContentModule {}

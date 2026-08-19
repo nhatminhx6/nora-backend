@@ -207,7 +207,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"displayName\": \"Nora User\",\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"locale\": \"vi\",\n  \"notificationIntensity\": \"balanced\",\n  \"dailyBriefTime\": \"08:00\",\n  \"profession\": \"Mobile Developer\",\n  \"interests\": [\"AI\", \"Crypto\"],\n  \"goals\": [\"Theo dõi tin quan trọng\"],\n  \"locations\": [\"Ho Chi Minh City\"]\n}"
+              "raw": "{\n  \"displayName\": \"Nora User\",\n  \"timezone\": \"Asia/Ho_Chi_Minh\",\n  \"locale\": \"vi\",\n  \"homeMarket\": \"VN\",\n  \"followedMarkets\": [\"GLOBAL\", \"US\"],\n  \"notificationIntensity\": \"balanced\",\n  \"dailyBriefTime\": \"08:00\",\n  \"profession\": \"Mobile Developer\",\n  \"interests\": [\"AI\", \"Crypto\"],\n  \"goals\": [\"Theo dõi tin quan trọng\"],\n  \"locations\": [\"Ho Chi Minh City\"]\n}"
             },
             "url": "{{host}}/users/me"
           }
@@ -340,6 +340,32 @@
               "raw": "{\n  \"topicKey\": \"technology\",\n  \"refinements\": [\"OpenAI\", \"SwiftUI\"],\n  \"config\": {\n    \"notificationMode\": \"dailyBrief\"\n  }\n}"
             },
             "url": "{{host}}/interests"
+          }
+        },
+        {
+          "name": "Replace Topic Selection",
+          "request": {
+            "method": "PUT",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"topics\": [\n    { \"key\": \"technology\", \"refinements\": [\"OpenAI\", \"SwiftUI\"] },\n    { \"key\": \"markets\", \"refinements\": [\"Bitcoin\"] }\n  ]\n}"
+            },
+            "url": "{{host}}/v2/users/me/topics"
           }
         },
         {
@@ -499,23 +525,6 @@
       "name": "Content",
       "item": [
         {
-          "name": "Queue Real Data Sync",
-          "request": {
-            "auth": {
-              "type": "noauth"
-            },
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{token}}",
-                "type": "text"
-              }
-            ],
-            "url": "{{host}}/ingestion/sync"
-          }
-        },
-        {
           "name": "Seed Development Data",
           "request": {
             "auth": {
@@ -547,6 +556,23 @@
               }
             ],
             "url": "{{host}}/feed?category=all&page=1&locale=vi"
+          }
+        },
+        {
+          "name": "Get Feed V2",
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": "{{host}}/v2/feed?locale=vi&limit=20"
           }
         },
         {

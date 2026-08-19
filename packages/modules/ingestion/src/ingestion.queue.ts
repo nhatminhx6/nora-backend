@@ -1,12 +1,20 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JobsOptions, Queue } from 'bullmq';
+import {
+  ContentJobData,
+  assertContentJobData,
+  contentJobOptions,
+  contentJobLogMetadata,
+  isContentJobData,
+} from './content-job';
 
 export const INGESTION_QUEUE = 'nora-ingestion';
 
 export type IngestionJobData = { type: 'sync-all' } | { type: 'sync-user'; userId: string };
 export type NoraIngestionJobData =
   | IngestionJobData
+  | ContentJobData
   | { type: 'backfill-localizations' }
   | {
       type: 'localize-insight';
@@ -89,6 +97,57 @@ export class IngestionQueue implements OnModuleDestroy {
       { ...this.defaults, jobId: `backfill-localizations-${bucket}` },
     );
     return { jobId: String(job.id) };
+  }
+
+  async enqueueContentJob(data: ContentJobData): Promise<{ jobId: string }> {
+    assertContentJobData(data);
+    const job = await this.queue.add(
+      data.type.toLocaleLowerCase('en-US'),
+      data,
+      contentJobOptions(data),
+    );
+    return { jobId: String(job.id) };
+  }
+
+  async listFailedContentJobs(start = 0, end = 99) {
+    const jobs = await this.queue.getFailed(start, end);
+    return jobs
+      .filter((job) => isContentJobData(job.data))
+      .map((job) => ({
+        jobId: String(job.id),
+        failedReason: job.failedReason,
+        attemptsMade: job.attemptsMade,
+        metadata: contentJobLogMetadata(job.data as ContentJobData, job.attemptsMade),
+      }));
+  }
+
+  async failedContentJobs(start = 0, end = 99) {
+    const jobs = await this.queue.getFailed(start, end);
+    return jobs
+      .filter((job) => isContentJobData(job.data))
+      .map((job) => ({
+        jobId: String(job.id),
+        failedReason: job.failedReason,
+        errorCode: job.failedReason.split(':')[0] ?? 'UNKNOWN',
+        attemptsMade: job.attemptsMade,
+        data: job.data as ContentJobData,
+      }));
+  }
+
+  async retryFailedJob(jobId: string): Promise<void> {
+    const job = await this.queue.getJob(jobId);
+    if (!job || !isContentJobData(job.data) || (await job.getState()) !== 'failed')
+      throw new Error('FAILED_JOB_NOT_FOUND');
+    await job.retry('failed');
+  }
+
+  async metrics() {
+    const counts = await this.queue.getJobCounts('waiting', 'active', 'delayed', 'failed');
+    const oldest = (await this.queue.getWaiting(0, 0))[0];
+    return {
+      ...counts,
+      oldestWaitingAgeMs: oldest?.timestamp ? Math.max(0, Date.now() - oldest.timestamp) : 0,
+    };
   }
 
   async onModuleDestroy(): Promise<void> {
